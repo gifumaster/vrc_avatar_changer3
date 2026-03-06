@@ -1,7 +1,7 @@
 <template>
   <div class="app-shell">
     <main class="layout">
-      <section class="panel panel-wide">
+      <section class="panel-wide main-shell">
         <section class="section-header">
           <div class="section-title">
             <p class="section-kicker">Avatar Changer</p>
@@ -152,7 +152,7 @@ const filteredAvatars = computed(() => {
 });
 
 const availableMultiTags = computed(() => {
-  return [...new Set(avatars.value.flatMap((avatar) => splitTags(avatar.tags).multiTags))].sort(
+  return [...new Set([...avatars.value.flatMap((avatar) => splitTags(avatar.tags).multiTags), ...activeMultiTags.value])].sort(
     (left, right) => left.localeCompare(right),
   );
 });

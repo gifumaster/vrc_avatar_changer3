@@ -1,9 +1,7 @@
 :root {
   font-family: "Yu Gothic UI", "Segoe UI", sans-serif;
   color: #1f2328;
-  background:
-    radial-gradient(circle at top left, rgba(177, 216, 255, 0.9), transparent 32%),
-    linear-gradient(135deg, #f6f4ed 0%, #eef3f8 58%, #dbe7f1 100%);
+  background: #ffffff;
   line-height: 1.5;
   font-weight: 400;
 }
@@ -66,6 +64,14 @@ input {
   padding: 20px;
 }
 
+.main-shell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
 .stack {
   display: grid;
   gap: 16px;
@@ -79,7 +85,7 @@ input {
   width: min(360px, calc(100vw - 24px));
   height: 100vh;
   padding: 76px 20px 20px;
-  background: rgba(246, 244, 237, 0.94);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(18px);
   border-left: 1px solid rgba(31, 35, 40, 0.08);
   transform: translateX(100%);
@@ -280,6 +286,16 @@ input {
   height: 420px;
   display: flex;
   flex-direction: column;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.avatar-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(30, 94, 255, 0.3);
+  box-shadow: 0 18px 40px rgba(30, 94, 255, 0.14);
 }
 
 .avatar-thumb {
@@ -287,9 +303,7 @@ input {
   place-items: center;
   height: 236px;
   overflow: hidden;
-  background:
-    linear-gradient(135deg, rgba(34, 86, 160, 0.18), rgba(255, 255, 255, 0.18)),
-    linear-gradient(135deg, #bcd8ef, #f6ead6);
+  background: #eef2f6;
   color: #4c6073;
   font-size: 0.82rem;
   font-weight: 600;
@@ -379,9 +393,7 @@ input {
 
 .dialog-image-wrap {
   aspect-ratio: 4 / 3;
-  background:
-    linear-gradient(135deg, rgba(34, 86, 160, 0.18), rgba(255, 255, 255, 0.18)),
-    linear-gradient(135deg, #bcd8ef, #f6ead6);
+  background: #eef2f6;
 }
 
 .dialog-image {
