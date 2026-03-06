@@ -1,0 +1,26 @@
+[package]
+name = "avatar_changer"
+version = "0.1.0"
+description = "VRChat avatar manager for Windows"
+authors = ["gifum"]
+edition = "2021"
+
+[lib]
+name = "avatar_changer_lib"
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+base64 = "0.22"
+chrono = { version = "0.4", features = ["clock"] }
+dirs = "6.0"
+keyring = { version = "3.6.3", features = ["windows-native"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rosc = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.0", features = [] }
+tokio = { version = "1", features = ["time"] }
+urlencoding = "2.1"

@@ -1,0 +1,158 @@
+use crate::{
+    auth::CredentialStore,
+    cache::AvatarCache,
+    models::{
+        AvatarCachePayload, LoginRequest, LoginResult, OscSettings, SessionState, StoredSession,
+        TwoFactorRequest,
+    },
+    osc::OscClient,
+    settings::SettingsStore,
+    vrchat::VrchatClient,
+};
+use std::process::Command;
+
+#[tauri::command]
+pub fn load_saved_session() -> Result<Option<StoredSession>, String> {
+    CredentialStore::new()?.load_session()
+}
+
+#[tauri::command]
+pub fn save_session(session: StoredSession) -> Result<(), String> {
+    CredentialStore::new()?.save_session(&session)
+}
+
+#[tauri::command]
+pub fn clear_saved_session() -> Result<(), String> {
+    CredentialStore::new()?.clear_session()
+}
+
+#[tauri::command]
+pub fn load_osc_settings() -> Result<OscSettings, String> {
+    SettingsStore::new()?.load_osc_settings()
+}
+
+#[tauri::command]
+pub fn save_osc_settings(settings: OscSettings) -> Result<OscSettings, String> {
+    SettingsStore::new()?.save_osc_settings(&settings)
+}
+
+#[tauri::command]
+pub fn load_cached_avatar_list() -> Result<AvatarCachePayload, String> {
+    AvatarCache::new()?.load()
+}
+
+#[tauri::command]
+pub fn save_avatar_tags(avatar_id: String, tags: Vec<String>) -> Result<AvatarCachePayload, String> {
+    AvatarCache::new()?.update_avatar_tags(&avatar_id, tags)
+}
+
+#[tauri::command]
+pub async fn login_vrchat(request: LoginRequest) -> Result<LoginResult, String> {
+    let result = VrchatClient::new()
+        .login(&request.username, &request.password)
+        .await?;
+
+    if result.status == "authenticated" {
+        if let Some(auth_token) = &result.auth_token {
+            CredentialStore::new()?.save_session(&StoredSession {
+                username: result.username.clone(),
+                auth_token: auth_token.clone(),
+            })?;
+        }
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn submit_two_factor(request: TwoFactorRequest) -> Result<SessionState, String> {
+    let client = VrchatClient::new();
+    let verified = client
+        .verify_two_factor(&request.auth_token, &request.code, &request.mode)
+        .await?;
+
+    if !verified {
+        return Err("Two-factor verification was rejected".to_string());
+    }
+
+    CredentialStore::new()?.save_session(&StoredSession {
+        username: request.username.clone(),
+        auth_token: request.auth_token.clone(),
+    })?;
+
+    Ok(SessionState {
+        status: "authenticated".to_string(),
+        username: Some(request.username),
+        two_factor_required: false,
+    })
+}
+
+#[tauri::command]
+pub async fn verify_session() -> Result<SessionState, String> {
+    let session = CredentialStore::new()?.load_session()?;
+
+    match session {
+        Some(session) => Ok(SessionState {
+            status: "authenticated".to_string(),
+            username: Some(session.username),
+            two_factor_required: false,
+        }),
+        None => Ok(SessionState {
+            status: "signed_out".to_string(),
+            username: None,
+            two_factor_required: false,
+        }),
+    }
+}
+
+#[tauri::command]
+pub async fn refresh_avatar_list() -> Result<AvatarCachePayload, String> {
+    let session = CredentialStore::new()?.load_session()?;
+    let Some(session) = session else {
+        return Err("No saved session was found".to_string());
+    };
+
+    let client = VrchatClient::new();
+    let avatars = client.get_own_avatars(&session.auth_token).await?;
+    let cache = AvatarCache::new()?;
+
+    cache
+        .store(&client.http_client(), avatars, chrono::Utc::now().to_rfc3339())
+        .await
+}
+
+#[tauri::command]
+pub async fn refresh_latest_avatar_page() -> Result<AvatarCachePayload, String> {
+    let session = CredentialStore::new()?.load_session()?;
+    let Some(session) = session else {
+        return Err("No saved session was found".to_string());
+    };
+
+    let client = VrchatClient::new();
+    let avatars = client.get_recent_avatars(&session.auth_token, 20).await?;
+    let cache = AvatarCache::new()?;
+
+    cache
+        .store_partial(&client.http_client(), avatars, chrono::Utc::now().to_rfc3339())
+        .await
+}
+
+#[tauri::command]
+pub fn switch_avatar_via_osc(avatar_id: String) -> Result<(), String> {
+    let settings = SettingsStore::new()?.load_osc_settings()?;
+    if !settings.enabled {
+        return Err("OSC is disabled in settings.".to_string());
+    }
+
+    OscClient::new().switch_avatar(&avatar_id, &settings.host, settings.port)
+}
+
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    Command::new("cmd")
+        .args(["/C", "start", "", &url])
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
