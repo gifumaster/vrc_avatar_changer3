@@ -114,6 +114,7 @@ import LoginCard from "@/components/LoginCard.vue";
 import SearchToolbar from "@/components/SearchToolbar.vue";
 import SettingsCard from "@/components/SettingsCard.vue";
 import {
+  clearSavedSession,
   loadCachedAvatarList,
   loadOscSettings,
   refreshLatestAvatarPage,
@@ -164,6 +165,35 @@ const settingsMessage = ref("");
 const isFetching = ref(false);
 const fetchMode = ref<"latest" | "full" | null>(null);
 
+function createSignedOutSession(): SessionState {
+  return {
+    status: "signed_out",
+    username: null,
+    twoFactorRequired: false,
+  };
+}
+
+function isUnauthorizedError(error: unknown) {
+  if (typeof error === "string") {
+    return error.includes("unauthorized") || error.includes("401");
+  }
+
+  if (error instanceof Error) {
+    return error.message.includes("unauthorized") || error.message.includes("401");
+  }
+
+  return false;
+}
+
+async function signOutExpiredSession() {
+  try {
+    await clearSavedSession();
+  } catch {
+  } finally {
+    sessionState.value = createSignedOutSession();
+  }
+}
+
 const filteredAvatars = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   const requiredTerms = [query, ...activeSearchTerms.value.map((term) => term.trim().toLowerCase())].filter(Boolean);
@@ -201,7 +231,10 @@ async function loadAvatars() {
 
   try {
     applyAvatarPayload(await refreshAvatarList());
-  } catch {
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      await signOutExpiredSession();
+    }
   }
 }
 
@@ -217,11 +250,7 @@ async function refreshSession() {
   try {
     sessionState.value = await verifySession();
   } catch {
-    sessionState.value = {
-      status: "signed_out",
-      username: null,
-      twoFactorRequired: false,
-    };
+    sessionState.value = createSignedOutSession();
   }
 }
 
@@ -317,7 +346,10 @@ async function handleQuickRefresh() {
 
   try {
     applyAvatarPayload(await refreshLatestAvatarPage(uiSettings.value.latestFetchCount));
-  } catch {
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      await signOutExpiredSession();
+    }
   } finally {
     isFetching.value = false;
     fetchMode.value = null;

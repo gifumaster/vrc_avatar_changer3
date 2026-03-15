@@ -117,7 +117,12 @@ pub async fn refresh_avatar_list() -> Result<AvatarCachePayload, String> {
     let cache = AvatarCache::new()?;
 
     cache
-        .store(&client.http_client(), avatars, chrono::Utc::now().to_rfc3339())
+        .store(
+            &client.http_client(),
+            &session.auth_token,
+            avatars,
+            chrono::Utc::now().to_rfc3339(),
+        )
         .await
 }
 
@@ -133,7 +138,12 @@ pub async fn refresh_latest_avatar_page(limit: usize) -> Result<AvatarCachePaylo
     let cache = AvatarCache::new()?;
 
     cache
-        .store_partial(&client.http_client(), avatars, chrono::Utc::now().to_rfc3339())
+        .store_partial(
+            &client.http_client(),
+            &session.auth_token,
+            avatars,
+            chrono::Utc::now().to_rfc3339(),
+        )
         .await
 }
 

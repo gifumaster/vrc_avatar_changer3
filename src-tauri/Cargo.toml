@@ -1,6 +1,6 @@
 [package]
 name = "avatar_changer"
-version = "0.1.3"
+version = "0.1.4"
 description = "VRChat avatar manager for Windows"
 authors = ["gifum"]
 edition = "2021"
@@ -21,6 +21,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 rosc = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2.0", features = [] }
+tauri = { version = "2.0", features = ["protocol-asset"] }
 tokio = { version = "1", features = ["time"] }
 urlencoding = "2.1"

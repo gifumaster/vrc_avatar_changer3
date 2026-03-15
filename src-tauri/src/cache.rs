@@ -1,8 +1,14 @@
 use std::{collections::HashSet, fs, path::PathBuf};
 
-use reqwest::{header::CONTENT_TYPE, Client};
+use reqwest::{
+    header::{CONTENT_TYPE, COOKIE, USER_AGENT},
+    Client,
+};
 
-use crate::models::{AvatarCachePayload, AvatarSummary};
+use crate::{
+    models::{AvatarCachePayload, AvatarSummary},
+    vrchat::app_user_agent,
+};
 
 const APP_DIR_NAME: &str = "AvatarChanger";
 const CACHE_DIR_NAME: &str = "cache";
@@ -48,11 +54,12 @@ impl AvatarCache {
     pub async fn store(
         &self,
         client: &Client,
+        auth_token: &str,
         avatars: Vec<AvatarSummary>,
         last_synced_at: String,
     ) -> Result<AvatarCachePayload, String> {
         let payload = AvatarCachePayload {
-            avatars: self.attach_thumbnails(client, avatars, None).await,
+            avatars: self.attach_thumbnails(client, auth_token, avatars, None).await,
             last_synced_at: Some(last_synced_at),
         };
 
@@ -63,12 +70,13 @@ impl AvatarCache {
     pub async fn store_partial(
         &self,
         client: &Client,
+        auth_token: &str,
         avatars: Vec<AvatarSummary>,
         last_synced_at: String,
     ) -> Result<AvatarCachePayload, String> {
         let existing_payload = self.load()?;
         let refreshed = self
-            .attach_thumbnails(client, avatars, Some(&existing_payload.avatars))
+            .attach_thumbnails(client, auth_token, avatars, Some(&existing_payload.avatars))
             .await;
         let refreshed_ids: HashSet<String> = refreshed.iter().map(|avatar| avatar.id.clone()).collect();
         let mut merged = refreshed;
@@ -110,6 +118,7 @@ impl AvatarCache {
     async fn attach_thumbnails(
         &self,
         client: &Client,
+        auth_token: &str,
         avatars: Vec<AvatarSummary>,
         existing: Option<&[AvatarSummary]>,
     ) -> Vec<AvatarSummary> {
@@ -119,7 +128,7 @@ impl AvatarCache {
             let existing_avatar = existing.and_then(|items| items.iter().find(|item| item.id == avatar.id));
             let thumbnail_path = match &avatar.thumbnail_url {
                 Some(url) if !url.is_empty() => self
-                    .download_thumbnail(client, &avatar.id, url)
+                    .download_thumbnail(client, auth_token, &avatar.id, url)
                     .await
                     .ok()
                     .or_else(|| existing_avatar.and_then(|item| item.thumbnail_path.clone())),
@@ -152,10 +161,17 @@ impl AvatarCache {
     async fn download_thumbnail(
         &self,
         client: &Client,
+        auth_token: &str,
         avatar_id: &str,
         url: &str,
     ) -> Result<String, String> {
-        let response = client.get(url).send().await.map_err(|error| error.to_string())?;
+        let response = client
+            .get(url)
+            .header(USER_AGENT, app_user_agent())
+            .header(COOKIE, format!("auth={auth_token}"))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
 
         if !response.status().is_success() {
             return Err(format!("Thumbnail download failed with status {}", response.status()));

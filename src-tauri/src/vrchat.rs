@@ -12,6 +12,10 @@ use crate::models::{AvatarSummary, LoginResult};
 const API_BASE: &str = "https://api.vrchat.cloud/api/1";
 const APP_USER_AGENT: &str = "AvatarChanger/0.1.0 (Windows)";
 
+pub fn app_user_agent() -> &'static str {
+    APP_USER_AGENT
+}
+
 pub struct VrchatClient {
     client: Client,
 }
