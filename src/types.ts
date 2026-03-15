@@ -23,3 +23,8 @@ export type OscState = {
   host: string;
   port: number;
 };
+
+export type UiSettings = {
+  tagsEnabled: boolean;
+  switchButtonsEnabled: boolean;
+};

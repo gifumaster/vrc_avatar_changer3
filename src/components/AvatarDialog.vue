@@ -16,7 +16,7 @@
         <div class="dialog-body">
           <h3>{{ props.avatar.name }}</h3>
           <p class="dialog-description">{{ props.avatar.description || "No description" }}</p>
-          <section class="tag-editor">
+          <section v-if="tagsEnabled" class="tag-editor">
             <div class="tag-editor-row">
               <input
                 v-model="draftTag"
@@ -68,6 +68,7 @@ import type { AvatarSummary } from "@/lib/commands";
 const props = defineProps<{
   open: boolean;
   avatar: AvatarSummary | null;
+  tagsEnabled: boolean;
 }>();
 
 const emit = defineEmits<{

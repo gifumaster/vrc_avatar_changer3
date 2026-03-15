@@ -41,9 +41,15 @@
 
         <SearchToolbar
           v-model:query="searchQuery"
+          :saved-search-terms="savedSearchTerms"
+          :active-search-terms="activeSearchTerms"
+          :show-tags="uiSettings.tagsEnabled"
           :multi-tags="availableMultiTags"
           :active-multi-tags="activeMultiTags"
           :multi-tag-mode="multiTagMode"
+          @add-search-term="handleAddSearchTerm"
+          @toggle-search-term="handleToggleSearchTerm"
+          @remove-search-term="handleRemoveSearchTerm"
           @toggle-multi-tag="handleToggleMultiTag"
           @set-multi-tag-mode="handleSetMultiTagMode"
         />
@@ -54,12 +60,15 @@
         <p v-if="oscMessage" class="muted">{{ oscMessage }}</p>
         <AvatarGrid
           :avatars="filteredAvatars"
+          :show-tags="uiSettings.tagsEnabled"
+          :show-switch-button="uiSettings.switchButtonsEnabled"
           @select-avatar="selectedAvatarId = $event"
           @switch-avatar="handleSwitchAvatar"
         />
         <AvatarDialog
           :open="selectedAvatar !== null"
           :avatar="selectedAvatar"
+          :tags-enabled="uiSettings.tagsEnabled"
           @close="selectedAvatarId = null"
           @save-tags="handleSaveTags"
           @switch-avatar="handleDialogSwitchAvatar"
@@ -79,7 +88,7 @@
             @pending-two-factor="markPendingTwoFactor"
             @cleared="refreshSession"
           />
-          <SettingsCard :osc="oscState" :message="settingsMessage" @save="handleSaveOscSettings" />
+          <SettingsCard :osc="oscState" :ui="uiSettings" :message="settingsMessage" @save="handleSaveSettings" />
         </section>
       </aside>
     </main>
@@ -87,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
 import AvatarGrid from "@/components/AvatarGrid.vue";
 import AvatarDialog from "@/components/AvatarDialog.vue";
@@ -106,14 +115,18 @@ import {
 } from "@/lib/commands";
 import type { AvatarCachePayload, AvatarSummary } from "@/lib/commands";
 import { type MultiTagMode, splitTags } from "@/lib/tags";
-import type { CacheState, OscState, SessionState } from "@/types";
+import type { CacheState, OscState, SessionState, UiSettings } from "@/types";
 
 const avatars = ref<AvatarSummary[]>([]);
 const searchQuery = ref("");
+const savedSearchTerms = ref<string[]>([]);
+const activeSearchTerms = ref<string[]>([]);
 const activeMultiTags = ref<string[]>([]);
 const multiTagMode = ref<MultiTagMode>("all");
 const sidebarOpen = ref(false);
 const selectedAvatarId = ref<string | null>(null);
+const SEARCH_TERMS_STORAGE_KEY = "avatar-changer.search-terms";
+const UI_SETTINGS_STORAGE_KEY = "avatar-changer.ui-settings";
 
 const sessionState = ref<SessionState>({
   status: "signed_out",
@@ -131,6 +144,10 @@ const oscState = ref<OscState>({
   host: "127.0.0.1",
   port: 9000,
 });
+const uiSettings = ref<UiSettings>({
+  tagsEnabled: false,
+  switchButtonsEnabled: false,
+});
 const oscMessage = ref("");
 const settingsMessage = ref("");
 const isFetching = ref(false);
@@ -138,9 +155,10 @@ const fetchMode = ref<"latest" | "full" | null>(null);
 
 const filteredAvatars = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
+  const requiredTerms = [query, ...activeSearchTerms.value.map((term) => term.trim().toLowerCase())].filter(Boolean);
   return avatars.value.filter((avatar) => {
     const text = `${avatar.name} ${avatar.description} ${avatar.tags.join(" ")}`.toLowerCase();
-    const matchesQuery = query === "" || text.includes(query);
+    const matchesQuery = requiredTerms.length === 0 || requiredTerms.every((term) => text.includes(term));
     const { multiTags } = splitTags(avatar.tags);
     const matchesMulti =
       activeMultiTags.value.length === 0 ||
@@ -205,6 +223,21 @@ function markPendingTwoFactor() {
 }
 
 onMounted(() => {
+  try {
+    const storedTerms = window.localStorage.getItem(SEARCH_TERMS_STORAGE_KEY);
+    savedSearchTerms.value = storedTerms ? JSON.parse(storedTerms) : [];
+  } catch {
+    savedSearchTerms.value = [];
+  }
+  try {
+    const storedUiSettings = window.localStorage.getItem(UI_SETTINGS_STORAGE_KEY);
+    uiSettings.value = storedUiSettings ? { ...uiSettings.value, ...JSON.parse(storedUiSettings) } : uiSettings.value;
+  } catch {
+    uiSettings.value = {
+      tagsEnabled: false,
+      switchButtonsEnabled: false,
+    };
+  }
   void loadOscSettings()
     .then((settings) => {
       oscState.value = settings;
@@ -223,6 +256,26 @@ onMounted(() => {
     });
   void refreshSession();
 });
+
+watch(
+  savedSearchTerms,
+  (terms) => {
+    window.localStorage.setItem(SEARCH_TERMS_STORAGE_KEY, JSON.stringify(terms));
+    activeSearchTerms.value = activeSearchTerms.value.filter((term) => terms.includes(term));
+  },
+  { deep: true },
+);
+
+watch(
+  uiSettings,
+  (nextUiSettings) => {
+    window.localStorage.setItem(UI_SETTINGS_STORAGE_KEY, JSON.stringify(nextUiSettings));
+    if (!nextUiSettings.tagsEnabled) {
+      activeMultiTags.value = [];
+    }
+  },
+  { deep: true },
+);
 
 async function handleRefresh() {
   if (isFetching.value) {
@@ -286,6 +339,25 @@ function handleSetMultiTagMode(mode: MultiTagMode) {
   multiTagMode.value = mode;
 }
 
+function handleAddSearchTerm(term: string) {
+  const normalized = term.trim();
+  if (normalized === "" || savedSearchTerms.value.includes(normalized)) {
+    return;
+  }
+
+  savedSearchTerms.value = [...savedSearchTerms.value, normalized].sort((left, right) => left.localeCompare(right));
+}
+
+function handleToggleSearchTerm(term: string) {
+  activeSearchTerms.value = activeSearchTerms.value.includes(term)
+    ? activeSearchTerms.value.filter((item) => item !== term)
+    : [...activeSearchTerms.value, term];
+}
+
+function handleRemoveSearchTerm(term: string) {
+  savedSearchTerms.value = savedSearchTerms.value.filter((item) => item !== term);
+}
+
 async function handleSwitchAvatar(avatarId: string) {
   try {
     await switchAvatarViaOsc(avatarId);
@@ -300,10 +372,11 @@ async function handleDialogSwitchAvatar(avatarId: string) {
   selectedAvatarId.value = null;
 }
 
-async function handleSaveOscSettings(nextOsc: OscState) {
+async function handleSaveSettings(payload: { osc: OscState; ui: UiSettings }) {
   try {
-    oscState.value = await saveOscSettings(nextOsc);
-    settingsMessage.value = `OSC target updated to ${oscState.value.host}:${oscState.value.port}`;
+    oscState.value = await saveOscSettings(payload.osc);
+    uiSettings.value = payload.ui;
+    settingsMessage.value = `Settings updated. OSC target: ${oscState.value.host}:${oscState.value.port}`;
   } catch (error) {
     settingsMessage.value = error instanceof Error ? error.message : "Failed to save OSC settings.";
   }

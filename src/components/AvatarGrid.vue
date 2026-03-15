@@ -14,8 +14,9 @@
       <div class="avatar-copy">
         <h3>{{ avatar.name }}</h3>
         <p>{{ avatar.description }}</p>
-        <p class="meta">{{ avatar.tags.length > 0 ? avatar.tags.join(" / ") : "No tags yet" }}</p>
+        <p v-if="showTags" class="meta">{{ avatar.tags.length > 0 ? avatar.tags.join(" / ") : "No tags yet" }}</p>
         <button
+          v-if="showSwitchButton"
           class="primary-button avatar-action"
           type="button"
           @click.stop="emit('switch-avatar', avatar.id)"
@@ -34,6 +35,8 @@ import type { AvatarSummary } from "@/lib/commands";
 
 defineProps<{
   avatars: AvatarSummary[];
+  showTags: boolean;
+  showSwitchButton: boolean;
 }>();
 
 const emit = defineEmits<{

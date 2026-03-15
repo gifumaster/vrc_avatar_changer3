@@ -170,6 +170,27 @@ input {
   flex-wrap: wrap;
 }
 
+.toolbar-top-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 3fr) minmax(260px, 1fr);
+  align-items: start;
+  gap: 16px;
+  width: 100%;
+}
+
+.toolbar-spacer {
+  min-width: 0;
+}
+
+.saved-search-form {
+  display: grid;
+  gap: 8px;
+}
+
+.saved-search-chip-row {
+  width: 100%;
+}
+
 .fetch-status {
   display: inline-flex;
   align-items: center;
@@ -221,7 +242,17 @@ input {
 }
 
 .search-input {
-  max-width: 360px;
+  max-width: none;
+}
+
+.saved-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.saved-search-input {
+  flex: 1 1 220px;
 }
 
 .chip-row {
@@ -250,6 +281,39 @@ input {
 
 .chip-active {
   background: #204662;
+  color: #fff;
+}
+
+.saved-search-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #dcecf8;
+}
+
+.saved-search-chip-active {
+  background: #204662;
+}
+
+.saved-search-toggle {
+  border-radius: 0;
+}
+
+.saved-search-chip-active .saved-search-toggle {
+  background: transparent;
+  color: #fff;
+}
+
+.saved-search-remove {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 8px 10px 8px 0;
+  cursor: pointer;
+}
+
+.saved-search-chip-active .saved-search-remove {
   color: #fff;
 }
 
@@ -506,6 +570,11 @@ input {
 
   .app-shell {
     padding: 16px;
+  }
+
+  .toolbar-top-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr) minmax(220px, 1fr);
+    gap: 12px;
   }
 
   .sidebar-panel {

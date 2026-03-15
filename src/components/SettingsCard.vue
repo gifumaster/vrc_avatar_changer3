@@ -16,10 +16,18 @@
       <span>OSC Enabled</span>
       <input v-model="localEnabled" type="checkbox" />
     </label>
+    <label class="row">
+      <span>タグ機能を使う</span>
+      <input v-model="localTagsEnabled" type="checkbox" />
+    </label>
+    <label class="row">
+      <span>Switchボタンを表示</span>
+      <input v-model="localSwitchButtonsEnabled" type="checkbox" />
+    </label>
 
     <div class="card-actions">
       <button class="primary-button" type="button" :disabled="busy" @click="handleSave">
-        {{ busy ? "Saving..." : "Save OSC" }}
+        {{ busy ? "Saving..." : "Save Settings" }}
       </button>
     </div>
     <p v-if="props.message" class="muted">{{ props.message }}</p>
@@ -29,20 +37,23 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 
-import type { OscState } from "@/types";
+import type { OscState, UiSettings } from "@/types";
 
 const props = defineProps<{
   osc: OscState;
+  ui: UiSettings;
   message?: string;
 }>();
 
 const emit = defineEmits<{
-  save: [osc: OscState];
+  save: [payload: { osc: OscState; ui: UiSettings }];
 }>();
 
 const localEnabled = ref(props.osc.enabled);
 const localHost = ref(props.osc.host);
 const localPort = ref(props.osc.port);
+const localTagsEnabled = ref(props.ui.tagsEnabled);
+const localSwitchButtonsEnabled = ref(props.ui.switchButtonsEnabled);
 const busy = ref(false);
 
 watch(
@@ -55,15 +66,30 @@ watch(
   { deep: true },
 );
 
+watch(
+  () => props.ui,
+  (ui) => {
+    localTagsEnabled.value = ui.tagsEnabled;
+    localSwitchButtonsEnabled.value = ui.switchButtonsEnabled;
+  },
+  { deep: true },
+);
+
 function handleSave() {
   busy.value = true;
   const normalizedHost = localHost.value.trim() === "" ? "127.0.0.1" : localHost.value.trim();
   const normalizedPort = Number(localPort.value) || 9000;
 
   emit("save", {
-    enabled: localEnabled.value,
-    host: normalizedHost,
-    port: normalizedPort,
+    osc: {
+      enabled: localEnabled.value,
+      host: normalizedHost,
+      port: normalizedPort,
+    },
+    ui: {
+      tagsEnabled: localTagsEnabled.value,
+      switchButtonsEnabled: localSwitchButtonsEnabled.value,
+    },
   });
 
   localHost.value = normalizedHost;
