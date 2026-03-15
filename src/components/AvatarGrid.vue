@@ -57,7 +57,8 @@ let observer: IntersectionObserver | null = null;
 
 function thumbnailSrc(avatar: AvatarSummary): string | null {
   if (avatar.thumbnailPath) {
-    return convertFileSrc(avatar.thumbnailPath);
+    const version = avatar.thumbnailVersion ?? 0;
+    return `${convertFileSrc(avatar.thumbnailPath)}?v=${version}`;
   }
 
   return avatar.thumbnailUrl;

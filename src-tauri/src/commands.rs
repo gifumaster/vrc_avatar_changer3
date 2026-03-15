@@ -142,23 +142,56 @@ pub async fn refresh_avatar_list(app: tauri::AppHandle) -> Result<AvatarCachePay
 }
 
 #[tauri::command]
-pub async fn refresh_latest_avatar_page(limit: usize) -> Result<AvatarCachePayload, String> {
+pub async fn refresh_latest_avatar_page(
+    app: tauri::AppHandle,
+    limit: usize,
+) -> Result<AvatarCachePayload, String> {
     let session = CredentialStore::new()?.load_session()?;
     let Some(session) = session else {
         return Err("No saved session was found".to_string());
     };
 
     let client = VrchatClient::new();
+    let _ = app.emit(
+        AVATAR_FETCH_PROGRESS_EVENT,
+        AvatarFetchProgress {
+            phase: "avatars".to_string(),
+            fetched: 0,
+            total: Some(limit),
+        },
+    );
     let avatars = client.get_recent_avatars(&session.auth_token, limit).await?;
+    let avatar_ids = avatars.iter().map(|avatar| avatar.id.clone()).collect::<Vec<_>>();
+    let _ = app.emit(
+        AVATAR_FETCH_PROGRESS_EVENT,
+        AvatarFetchProgress {
+            phase: "avatars".to_string(),
+            fetched: avatars.len(),
+            total: Some(limit),
+        },
+    );
     let cache = AvatarCache::new()?;
 
-    cache
+    let _ = cache
         .store_partial(
             &client.http_client(),
             &session.auth_token,
             avatars,
             chrono::Utc::now().to_rfc3339(),
         )
+        .await?;
+
+    cache
+        .refresh_thumbnails(&client.http_client(), &session.auth_token, &avatar_ids, |fetched, total| {
+            let _ = app.emit(
+                AVATAR_FETCH_PROGRESS_EVENT,
+                AvatarFetchProgress {
+                    phase: "thumbnails".to_string(),
+                    fetched,
+                    total: Some(total),
+                },
+            );
+        })
         .await
 }
 
@@ -181,6 +214,35 @@ pub async fn cache_avatar_thumbnails(
 
     cache
         .cache_thumbnails(&client.http_client(), &session.auth_token, &avatar_ids, |fetched, total| {
+            let _ = app.emit(
+                AVATAR_FETCH_PROGRESS_EVENT,
+                AvatarFetchProgress {
+                    phase: "thumbnails".to_string(),
+                    fetched,
+                    total: Some(total),
+                },
+            );
+        })
+        .await
+}
+
+#[tauri::command]
+pub async fn refresh_avatar_detail(
+    app: tauri::AppHandle,
+    avatar_id: String,
+) -> Result<AvatarCachePayload, String> {
+    let session = CredentialStore::new()?.load_session()?;
+    let Some(session) = session else {
+        return Err("No saved session was found".to_string());
+    };
+
+    let client = VrchatClient::new();
+    let cache = AvatarCache::new()?;
+    let avatar = client.get_avatar(&session.auth_token, &avatar_id).await?;
+    let _ = cache.upsert_avatar(avatar)?;
+
+    cache
+        .refresh_thumbnails(&client.http_client(), &session.auth_token, &[avatar_id], |fetched, total| {
             let _ = app.emit(
                 AVATAR_FETCH_PROGRESS_EVENT,
                 AvatarFetchProgress {

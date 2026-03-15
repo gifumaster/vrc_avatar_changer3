@@ -15,7 +15,7 @@ const APP_DIR_NAME: &str = "AvatarChanger";
 const CACHE_DIR_NAME: &str = "cache";
 const THUMBNAIL_DIR_NAME: &str = "thumbnails";
 const AVATAR_CACHE_FILE: &str = "avatars.json";
-const THUMBNAIL_REQUEST_DELAY_MS: u64 = 750;
+const THUMBNAIL_REQUEST_DELAY_MS: u64 = 250;
 
 pub struct AvatarCache {
     base_dir: PathBuf,
@@ -103,12 +103,39 @@ impl AvatarCache {
         avatar_ids: &[String],
         mut on_progress: impl FnMut(usize, usize),
     ) -> Result<AvatarCachePayload, String> {
+        self.cache_thumbnails_inner(client, auth_token, avatar_ids, false, |fetched, total| {
+            on_progress(fetched, total);
+        })
+        .await
+    }
+
+    pub async fn refresh_thumbnails(
+        &self,
+        client: &Client,
+        auth_token: &str,
+        avatar_ids: &[String],
+        mut on_progress: impl FnMut(usize, usize),
+    ) -> Result<AvatarCachePayload, String> {
+        self.cache_thumbnails_inner(client, auth_token, avatar_ids, true, |fetched, total| {
+            on_progress(fetched, total);
+        })
+        .await
+    }
+
+    async fn cache_thumbnails_inner(
+        &self,
+        client: &Client,
+        auth_token: &str,
+        avatar_ids: &[String],
+        force: bool,
+        mut on_progress: impl FnMut(usize, usize),
+    ) -> Result<AvatarCachePayload, String> {
         let mut payload = self.load()?;
         let requested_ids: HashSet<&str> = avatar_ids.iter().map(String::as_str).collect();
         let total = payload
             .avatars
             .iter()
-            .filter(|avatar| requested_ids.contains(avatar.id.as_str()) && avatar.thumbnail_path.is_none())
+            .filter(|avatar| requested_ids.contains(avatar.id.as_str()) && (force || avatar.thumbnail_path.is_none()))
             .count();
 
         if total == 0 {
@@ -119,16 +146,17 @@ impl AvatarCache {
         on_progress(0, total);
 
         for avatar in &mut payload.avatars {
-            if !requested_ids.contains(avatar.id.as_str()) || avatar.thumbnail_path.is_some() {
+            if !requested_ids.contains(avatar.id.as_str()) || (!force && avatar.thumbnail_path.is_some()) {
                 continue;
             }
 
             if let Some(url) = avatar.thumbnail_url.clone().filter(|url| !url.is_empty()) {
-                if let Ok(path) = self
+                if let Ok((path, version)) = self
                     .download_thumbnail(client, auth_token, &avatar.id, &url)
                     .await
                 {
                     avatar.thumbnail_path = Some(path);
+                    avatar.thumbnail_version = Some(version);
                 }
             }
 
@@ -161,6 +189,24 @@ impl AvatarCache {
         Ok(payload)
     }
 
+    pub fn upsert_avatar(&self, avatar: AvatarSummary) -> Result<AvatarCachePayload, String> {
+        let mut payload = self.load()?;
+        let next_avatar = merge_cached_avatar(avatar, Some(&payload.avatars));
+
+        if let Some(existing_avatar) = payload
+            .avatars
+            .iter_mut()
+            .find(|existing_avatar| existing_avatar.id == next_avatar.id)
+        {
+            *existing_avatar = next_avatar;
+        } else {
+            payload.avatars.insert(0, next_avatar);
+        }
+
+        self.write_payload(&payload)?;
+        Ok(payload)
+    }
+
     fn write_payload(&self, payload: &AvatarCachePayload) -> Result<(), String> {
         fs::create_dir_all(&self.base_dir).map_err(|error| error.to_string())?;
         let json = serde_json::to_string_pretty(payload).map_err(|error| error.to_string())?;
@@ -173,7 +219,7 @@ impl AvatarCache {
         auth_token: &str,
         avatar_id: &str,
         url: &str,
-    ) -> Result<String, String> {
+    ) -> Result<(String, i64), String> {
         let response = client
             .get(url)
             .header(USER_AGENT, app_user_agent())
@@ -196,8 +242,9 @@ impl AvatarCache {
         let path = self.thumbnail_dir.join(format!("{avatar_id}.{extension}"));
 
         fs::write(&path, bytes).map_err(|error| error.to_string())?;
+        let version = chrono::Utc::now().timestamp_millis();
 
-        Ok(path.to_string_lossy().to_string())
+        Ok((path.to_string_lossy().to_string(), version))
     }
 }
 
@@ -207,25 +254,33 @@ fn merge_cached_fields(
 ) -> Vec<AvatarSummary> {
     avatars
         .into_iter()
-        .map(|avatar| {
-            let existing_avatar = existing.and_then(|items| items.iter().find(|item| item.id == avatar.id));
-            let tags = if avatar.tags.is_empty() {
-                existing_avatar
-                    .map(|item| item.tags.clone())
-                    .unwrap_or_default()
-            } else {
-                avatar.tags.clone()
-            };
-
-            AvatarSummary {
-                thumbnail_path: avatar
-                    .thumbnail_path
-                    .or_else(|| existing_avatar.and_then(|item| item.thumbnail_path.clone())),
-                tags,
-                ..avatar
-            }
-        })
+        .map(|avatar| merge_cached_avatar(avatar, existing))
         .collect()
+}
+
+fn merge_cached_avatar(
+    avatar: AvatarSummary,
+    existing: Option<&[AvatarSummary]>,
+) -> AvatarSummary {
+    let existing_avatar = existing.and_then(|items| items.iter().find(|item| item.id == avatar.id));
+    let tags = if avatar.tags.is_empty() {
+        existing_avatar
+            .map(|item| item.tags.clone())
+            .unwrap_or_default()
+    } else {
+        avatar.tags.clone()
+    };
+
+    AvatarSummary {
+        thumbnail_path: avatar
+            .thumbnail_path
+            .or_else(|| existing_avatar.and_then(|item| item.thumbnail_path.clone())),
+        thumbnail_version: avatar
+            .thumbnail_version
+            .or_else(|| existing_avatar.and_then(|item| item.thumbnail_version)),
+        tags,
+        ..avatar
+    }
 }
 
 fn content_type_to_extension(content_type: &str) -> &'static str {

@@ -21,6 +21,7 @@ export type AvatarSummary = {
   description: string;
   thumbnailUrl: string | null;
   thumbnailPath: string | null;
+  thumbnailVersion: number | null;
   tags: string[];
   updatedAt: string | null;
 };
@@ -89,6 +90,10 @@ export async function refreshLatestAvatarPage(limit: 20 | 50 | 100): Promise<Ava
 
 export async function cacheAvatarThumbnails(avatarIds: string[]): Promise<AvatarCachePayload> {
   return invoke<AvatarCachePayload>("cache_avatar_thumbnails", { avatarIds });
+}
+
+export async function refreshAvatarDetail(avatarId: string): Promise<AvatarCachePayload> {
+  return invoke<AvatarCachePayload>("refresh_avatar_detail", { avatarId });
 }
 
 export async function switchAvatarViaOsc(_avatarId: string): Promise<void> {

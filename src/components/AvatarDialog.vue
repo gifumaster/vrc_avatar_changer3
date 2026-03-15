@@ -47,11 +47,16 @@
           <button class="ghost-button dialog-link" type="button" @click="handleOpenVrchat">
             VRChat
           </button>
+          <button class="ghost-button" type="button" :disabled="busy" @click="handleRefreshAvatar">
+            {{ busy ? "Refreshing..." : "Refresh" }}
+          </button>
           <button class="primary-button" type="button" @click="emit('switch-avatar', props.avatar.id)">
             Switch
           </button>
           <button class="ghost-button" type="button" @click="emit('close')">Close</button>
         </div>
+
+        <p v-if="errorMessage" class="error-text dialog-error">{{ errorMessage }}</p>
       </section>
     </div>
   </Teleport>
@@ -61,9 +66,9 @@
 import { computed, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-import { openExternalUrl } from "@/lib/commands";
+import { openExternalUrl, refreshAvatarDetail } from "@/lib/commands";
 import { addMultiTag, removeTag, splitTags } from "@/lib/tags";
-import type { AvatarSummary } from "@/lib/commands";
+import type { AvatarCachePayload, AvatarSummary } from "@/lib/commands";
 
 const props = defineProps<{
   open: boolean;
@@ -75,10 +80,13 @@ const emit = defineEmits<{
   close: [];
   "switch-avatar": [avatarId: string];
   "save-tags": [payload: { avatarId: string; tags: string[] }];
+  "refresh-avatar": [payload: AvatarCachePayload];
 }>();
 
 const draftTag = ref("");
 const editableTags = ref<string[]>([]);
+const busy = ref(false);
+const errorMessage = ref("");
 
 const thumbnailSrc = computed(() => {
   if (!props.avatar) {
@@ -86,7 +94,8 @@ const thumbnailSrc = computed(() => {
   }
 
   if (props.avatar.thumbnailPath) {
-    return convertFileSrc(props.avatar.thumbnailPath);
+    const version = props.avatar.thumbnailVersion ?? 0;
+    return `${convertFileSrc(props.avatar.thumbnailPath)}?v=${version}`;
   }
 
   return props.avatar.thumbnailUrl;
@@ -107,6 +116,7 @@ watch(
   () => {
     editableTags.value = props.avatar?.tags ? [...props.avatar.tags] : [];
     draftTag.value = "";
+    errorMessage.value = "";
   },
   { immediate: true },
 );
@@ -117,6 +127,23 @@ async function handleOpenVrchat() {
   }
 
   await openExternalUrl(vrchatUrl.value);
+}
+
+async function handleRefreshAvatar() {
+  if (!props.avatar || busy.value) {
+    return;
+  }
+
+  busy.value = true;
+  errorMessage.value = "";
+
+  try {
+    emit("refresh-avatar", await refreshAvatarDetail(props.avatar.id));
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "Failed to refresh avatar.";
+  } finally {
+    busy.value = false;
+  }
 }
 
 function handleAddTag() {

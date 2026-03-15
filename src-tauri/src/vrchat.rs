@@ -51,6 +51,17 @@ struct AvatarListItem {
     updated_at: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct AvatarDetailResponse {
+    id: String,
+    name: String,
+    description: Option<String>,
+    #[serde(rename = "thumbnailImageUrl")]
+    thumbnail_image_url: Option<String>,
+    #[serde(rename = "updated_at")]
+    updated_at: Option<String>,
+}
+
 struct AvatarPage {
     avatars: Vec<AvatarSummary>,
     total: Option<usize>,
@@ -190,6 +201,48 @@ impl VrchatClient {
         Ok(self.get_own_avatars_page(auth_token, limit, 0).await?.avatars)
     }
 
+    pub async fn get_avatar(
+        &self,
+        auth_token: &str,
+        avatar_id: &str,
+    ) -> Result<AvatarSummary, String> {
+        let response = self
+            .client
+            .get(format!("{API_BASE}/avatars/{avatar_id}"))
+            .header(USER_AGENT, APP_USER_AGENT)
+            .header(COOKIE, format!("auth={auth_token}"))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("unauthorized".to_string());
+        }
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "VRChat avatar fetch failed with status {}",
+                response.status()
+            ));
+        }
+
+        let avatar = response
+            .json::<AvatarDetailResponse>()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        Ok(AvatarSummary {
+            id: avatar.id,
+                name: avatar.name,
+                description: avatar.description.unwrap_or_default(),
+                thumbnail_url: avatar.thumbnail_image_url,
+                thumbnail_path: None,
+                thumbnail_version: None,
+                tags: Vec::new(),
+                updated_at: avatar.updated_at,
+            })
+    }
+
     async fn fetch_api_key(&self) -> Result<String, String> {
         let response = self
             .client
@@ -254,13 +307,14 @@ impl VrchatClient {
                 .into_iter()
                 .map(|avatar| AvatarSummary {
                     id: avatar.id,
-                    name: avatar.name,
-                    description: avatar.description.unwrap_or_default(),
-                    thumbnail_url: avatar.thumbnail_image_url,
-                    thumbnail_path: None,
-                    tags: Vec::new(),
-                    updated_at: avatar.updated_at,
-                })
+            name: avatar.name,
+            description: avatar.description.unwrap_or_default(),
+            thumbnail_url: avatar.thumbnail_image_url,
+            thumbnail_path: None,
+            thumbnail_version: None,
+            tags: Vec::new(),
+            updated_at: avatar.updated_at,
+        })
                 .collect(),
             total,
         })

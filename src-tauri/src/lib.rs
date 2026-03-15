@@ -28,6 +28,7 @@ pub fn run() {
             commands::refresh_avatar_list,
             commands::refresh_latest_avatar_page,
             commands::cache_avatar_thumbnails,
+            commands::refresh_avatar_detail,
             commands::switch_avatar_via_osc,
             commands::open_external_url
         ])

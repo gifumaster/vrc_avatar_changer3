@@ -538,6 +538,10 @@ input {
   padding: 0 18px 18px;
 }
 
+.dialog-error {
+  padding: 0 18px 18px;
+}
+
 .dialog-link {
   text-decoration: none;
 }

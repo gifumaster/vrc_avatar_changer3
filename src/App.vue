@@ -79,6 +79,7 @@
           :avatar="selectedAvatar"
           :tags-enabled="uiSettings.tagsEnabled"
           @close="selectedAvatarId = null"
+          @refresh-avatar="applyAvatarPayload"
           @save-tags="handleSaveTags"
           @switch-avatar="handleDialogSwitchAvatar"
         />
@@ -251,15 +252,17 @@ const fetchStatusText = computed(() => {
 });
 
 const thumbnailStatusText = computed(() => {
-  if (isFetching.value || fetchProgress.value?.phase !== "thumbnails") {
+  if (fetchProgress.value?.phase !== "thumbnails") {
     return "";
   }
 
   if (fetchProgress.value.total != null) {
-    return `Caching visible thumbnails... ${fetchProgress.value.fetched} / ${fetchProgress.value.total}`;
+    return isFetching.value
+      ? `Refreshing latest thumbnails... ${fetchProgress.value.fetched} / ${fetchProgress.value.total}`
+      : `Caching visible thumbnails... ${fetchProgress.value.fetched} / ${fetchProgress.value.total}`;
   }
 
-  return "Caching visible thumbnails...";
+  return isFetching.value ? "Refreshing latest thumbnails..." : "Caching visible thumbnails...";
 });
 
 const prioritizedThumbnailAvatarIds = computed(() => {
@@ -348,6 +351,21 @@ function markPendingTwoFactor() {
 onMounted(() => {
   void listen<{ phase: "avatars" | "thumbnails"; fetched: number; total: number | null }>("avatar-fetch-progress", (event) => {
     fetchProgress.value = event.payload;
+    if (
+      event.payload.phase === "thumbnails" &&
+      event.payload.total != null &&
+      event.payload.fetched >= event.payload.total
+    ) {
+      window.setTimeout(() => {
+        if (
+          fetchProgress.value?.phase === "thumbnails" &&
+          fetchProgress.value.total != null &&
+          fetchProgress.value.fetched >= fetchProgress.value.total
+        ) {
+          fetchProgress.value = null;
+        }
+      }, 600);
+    }
   }).then((unlisten) => {
     unlistenFetchProgress = unlisten;
   });

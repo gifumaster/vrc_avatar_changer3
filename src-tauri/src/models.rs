@@ -17,6 +17,8 @@ pub struct AvatarSummary {
     pub thumbnail_url: Option<String>,
     #[serde(rename = "thumbnailPath")]
     pub thumbnail_path: Option<String>,
+    #[serde(rename = "thumbnailVersion")]
+    pub thumbnail_version: Option<i64>,
     pub tags: Vec<String>,
     #[serde(rename = "updatedAt")]
     pub updated_at: Option<String>,
