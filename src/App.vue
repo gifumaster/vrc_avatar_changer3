@@ -31,7 +31,11 @@
           </div>
           <div class="row">
             <button class="ghost-button" type="button" :disabled="isFetching" @click="handleQuickRefresh">
-              {{ isFetching && fetchMode === "latest" ? "Fetching Latest..." : "Fetch Latest 20" }}
+              {{
+                isFetching && fetchMode === "latest"
+                  ? `Fetching Latest ${uiSettings.latestFetchCount}...`
+                  : `Fetch Latest ${uiSettings.latestFetchCount}`
+              }}
             </button>
             <button class="ghost-button" type="button" :disabled="isFetching" @click="handleRefresh">
               {{ isFetching && fetchMode === "full" ? "Fetching All..." : "Fetch All Avatars" }}
@@ -55,7 +59,13 @@
         />
         <div v-if="isFetching" class="fetch-status">
           <span class="fetch-spinner" aria-hidden="true"></span>
-          <span>{{ fetchMode === "latest" ? "Fetching the latest 20 avatars..." : "Fetching all avatars..." }}</span>
+          <span>
+            {{
+              fetchMode === "latest"
+                ? `Fetching the latest ${uiSettings.latestFetchCount} avatars...`
+                : "Fetching all avatars..."
+            }}
+          </span>
         </div>
         <p v-if="oscMessage" class="muted">{{ oscMessage }}</p>
         <AvatarGrid
@@ -147,6 +157,7 @@ const oscState = ref<OscState>({
 const uiSettings = ref<UiSettings>({
   tagsEnabled: false,
   switchButtonsEnabled: false,
+  latestFetchCount: 20,
 });
 const oscMessage = ref("");
 const settingsMessage = ref("");
@@ -236,6 +247,7 @@ onMounted(() => {
     uiSettings.value = {
       tagsEnabled: false,
       switchButtonsEnabled: false,
+      latestFetchCount: 20,
     };
   }
   void loadOscSettings()
@@ -304,7 +316,7 @@ async function handleQuickRefresh() {
   oscMessage.value = "";
 
   try {
-    applyAvatarPayload(await refreshLatestAvatarPage());
+    applyAvatarPayload(await refreshLatestAvatarPage(uiSettings.value.latestFetchCount));
   } catch {
   } finally {
     isFetching.value = false;

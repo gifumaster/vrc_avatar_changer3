@@ -83,8 +83,8 @@ export async function refreshAvatarList(_filter?: AvatarFilter): Promise<AvatarC
   return invoke<AvatarCachePayload>("refresh_avatar_list");
 }
 
-export async function refreshLatestAvatarPage(): Promise<AvatarCachePayload> {
-  return invoke<AvatarCachePayload>("refresh_latest_avatar_page");
+export async function refreshLatestAvatarPage(limit: 20 | 50 | 100): Promise<AvatarCachePayload> {
+  return invoke<AvatarCachePayload>("refresh_latest_avatar_page", { limit });
 }
 
 export async function switchAvatarViaOsc(_avatarId: string): Promise<void> {

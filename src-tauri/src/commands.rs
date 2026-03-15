@@ -122,14 +122,14 @@ pub async fn refresh_avatar_list() -> Result<AvatarCachePayload, String> {
 }
 
 #[tauri::command]
-pub async fn refresh_latest_avatar_page() -> Result<AvatarCachePayload, String> {
+pub async fn refresh_latest_avatar_page(limit: usize) -> Result<AvatarCachePayload, String> {
     let session = CredentialStore::new()?.load_session()?;
     let Some(session) = session else {
         return Err("No saved session was found".to_string());
     };
 
     let client = VrchatClient::new();
-    let avatars = client.get_recent_avatars(&session.auth_token, 20).await?;
+    let avatars = client.get_recent_avatars(&session.auth_token, limit).await?;
     let cache = AvatarCache::new()?;
 
     cache

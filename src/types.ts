@@ -27,4 +27,5 @@ export type OscState = {
 export type UiSettings = {
   tagsEnabled: boolean;
   switchButtonsEnabled: boolean;
+  latestFetchCount: 20 | 50 | 100;
 };
