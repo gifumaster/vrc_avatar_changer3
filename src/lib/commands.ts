@@ -87,6 +87,10 @@ export async function refreshLatestAvatarPage(limit: 20 | 50 | 100): Promise<Ava
   return invoke<AvatarCachePayload>("refresh_latest_avatar_page", { limit });
 }
 
+export async function cacheAvatarThumbnails(avatarIds: string[]): Promise<AvatarCachePayload> {
+  return invoke<AvatarCachePayload>("cache_avatar_thumbnails", { avatarIds });
+}
+
 export async function switchAvatarViaOsc(_avatarId: string): Promise<void> {
   return invoke("switch_avatar_via_osc", { avatarId: _avatarId });
 }

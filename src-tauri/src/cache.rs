@@ -4,6 +4,7 @@ use reqwest::{
     header::{CONTENT_TYPE, COOKIE, USER_AGENT},
     Client,
 };
+use tokio::time::{sleep, Duration};
 
 use crate::{
     models::{AvatarCachePayload, AvatarSummary},
@@ -14,6 +15,7 @@ const APP_DIR_NAME: &str = "AvatarChanger";
 const CACHE_DIR_NAME: &str = "cache";
 const THUMBNAIL_DIR_NAME: &str = "thumbnails";
 const AVATAR_CACHE_FILE: &str = "avatars.json";
+const THUMBNAIL_REQUEST_DELAY_MS: u64 = 750;
 
 pub struct AvatarCache {
     base_dir: PathBuf,
@@ -51,15 +53,14 @@ impl AvatarCache {
         serde_json::from_str::<AvatarCachePayload>(&json).map_err(|error| error.to_string())
     }
 
-    pub async fn store(
+    pub fn store(
         &self,
-        client: &Client,
-        auth_token: &str,
         avatars: Vec<AvatarSummary>,
         last_synced_at: String,
     ) -> Result<AvatarCachePayload, String> {
+        let existing_payload = self.load()?;
         let payload = AvatarCachePayload {
-            avatars: self.attach_thumbnails(client, auth_token, avatars, None).await,
+            avatars: merge_cached_fields(avatars, Some(&existing_payload.avatars)),
             last_synced_at: Some(last_synced_at),
         };
 
@@ -69,15 +70,13 @@ impl AvatarCache {
 
     pub async fn store_partial(
         &self,
-        client: &Client,
-        auth_token: &str,
+        _client: &Client,
+        _auth_token: &str,
         avatars: Vec<AvatarSummary>,
         last_synced_at: String,
     ) -> Result<AvatarCachePayload, String> {
         let existing_payload = self.load()?;
-        let refreshed = self
-            .attach_thumbnails(client, auth_token, avatars, Some(&existing_payload.avatars))
-            .await;
+        let refreshed = merge_cached_fields(avatars, Some(&existing_payload.avatars));
         let refreshed_ids: HashSet<String> = refreshed.iter().map(|avatar| avatar.id.clone()).collect();
         let mut merged = refreshed;
 
@@ -92,6 +91,53 @@ impl AvatarCache {
             avatars: merged,
             last_synced_at: Some(last_synced_at),
         };
+
+        self.write_payload(&payload)?;
+        Ok(payload)
+    }
+
+    pub async fn cache_thumbnails(
+        &self,
+        client: &Client,
+        auth_token: &str,
+        avatar_ids: &[String],
+        mut on_progress: impl FnMut(usize, usize),
+    ) -> Result<AvatarCachePayload, String> {
+        let mut payload = self.load()?;
+        let requested_ids: HashSet<&str> = avatar_ids.iter().map(String::as_str).collect();
+        let total = payload
+            .avatars
+            .iter()
+            .filter(|avatar| requested_ids.contains(avatar.id.as_str()) && avatar.thumbnail_path.is_none())
+            .count();
+
+        if total == 0 {
+            return Ok(payload);
+        }
+
+        let mut processed = 0usize;
+        on_progress(0, total);
+
+        for avatar in &mut payload.avatars {
+            if !requested_ids.contains(avatar.id.as_str()) || avatar.thumbnail_path.is_some() {
+                continue;
+            }
+
+            if let Some(url) = avatar.thumbnail_url.clone().filter(|url| !url.is_empty()) {
+                if let Ok(path) = self
+                    .download_thumbnail(client, auth_token, &avatar.id, &url)
+                    .await
+                {
+                    avatar.thumbnail_path = Some(path);
+                }
+            }
+
+            processed += 1;
+            on_progress(processed, total);
+            if processed < total {
+                sleep(Duration::from_millis(THUMBNAIL_REQUEST_DELAY_MS)).await;
+            }
+        }
 
         self.write_payload(&payload)?;
         Ok(payload)
@@ -113,43 +159,6 @@ impl AvatarCache {
 
         self.write_payload(&payload)?;
         Ok(payload)
-    }
-
-    async fn attach_thumbnails(
-        &self,
-        client: &Client,
-        auth_token: &str,
-        avatars: Vec<AvatarSummary>,
-        existing: Option<&[AvatarSummary]>,
-    ) -> Vec<AvatarSummary> {
-        let mut cached = Vec::with_capacity(avatars.len());
-
-        for avatar in avatars {
-            let existing_avatar = existing.and_then(|items| items.iter().find(|item| item.id == avatar.id));
-            let thumbnail_path = match &avatar.thumbnail_url {
-                Some(url) if !url.is_empty() => self
-                    .download_thumbnail(client, auth_token, &avatar.id, url)
-                    .await
-                    .ok()
-                    .or_else(|| existing_avatar.and_then(|item| item.thumbnail_path.clone())),
-                _ => existing_avatar.and_then(|item| item.thumbnail_path.clone()),
-            };
-            let tags = if avatar.tags.is_empty() {
-                existing_avatar
-                    .map(|item| item.tags.clone())
-                    .unwrap_or_default()
-            } else {
-                avatar.tags.clone()
-            };
-
-            cached.push(AvatarSummary {
-                thumbnail_path,
-                tags,
-                ..avatar
-            });
-        }
-
-        cached
     }
 
     fn write_payload(&self, payload: &AvatarCachePayload) -> Result<(), String> {
@@ -190,6 +199,33 @@ impl AvatarCache {
 
         Ok(path.to_string_lossy().to_string())
     }
+}
+
+fn merge_cached_fields(
+    avatars: Vec<AvatarSummary>,
+    existing: Option<&[AvatarSummary]>,
+) -> Vec<AvatarSummary> {
+    avatars
+        .into_iter()
+        .map(|avatar| {
+            let existing_avatar = existing.and_then(|items| items.iter().find(|item| item.id == avatar.id));
+            let tags = if avatar.tags.is_empty() {
+                existing_avatar
+                    .map(|item| item.tags.clone())
+                    .unwrap_or_default()
+            } else {
+                avatar.tags.clone()
+            };
+
+            AvatarSummary {
+                thumbnail_path: avatar
+                    .thumbnail_path
+                    .or_else(|| existing_avatar.and_then(|item| item.thumbnail_path.clone())),
+                tags,
+                ..avatar
+            }
+        })
+        .collect()
 }
 
 fn content_type_to_extension(content_type: &str) -> &'static str {

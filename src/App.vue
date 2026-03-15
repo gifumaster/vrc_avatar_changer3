@@ -1,5 +1,9 @@
 <template>
   <div class="app-shell">
+    <div v-if="thumbnailStatusText" class="floating-status">
+      <span class="fetch-spinner" aria-hidden="true"></span>
+      <span>{{ thumbnailStatusText }}</span>
+    </div>
     <main class="layout">
       <section class="panel-wide main-shell">
         <section class="section-header">
@@ -59,13 +63,7 @@
         />
         <div v-if="isFetching" class="fetch-status">
           <span class="fetch-spinner" aria-hidden="true"></span>
-          <span>
-            {{
-              fetchMode === "latest"
-                ? `Fetching the latest ${uiSettings.latestFetchCount} avatars...`
-                : "Fetching all avatars..."
-            }}
-          </span>
+          <span>{{ fetchStatusText }}</span>
         </div>
         <p v-if="oscMessage" class="muted">{{ oscMessage }}</p>
         <AvatarGrid
@@ -74,6 +72,7 @@
           :show-switch-button="uiSettings.switchButtonsEnabled"
           @select-avatar="selectedAvatarId = $event"
           @switch-avatar="handleSwitchAvatar"
+          @visible-avatar-ids="visibleAvatarIds = $event"
         />
         <AvatarDialog
           :open="selectedAvatar !== null"
@@ -106,7 +105,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import AvatarGrid from "@/components/AvatarGrid.vue";
 import AvatarDialog from "@/components/AvatarDialog.vue";
@@ -114,6 +114,7 @@ import LoginCard from "@/components/LoginCard.vue";
 import SearchToolbar from "@/components/SearchToolbar.vue";
 import SettingsCard from "@/components/SettingsCard.vue";
 import {
+  cacheAvatarThumbnails,
   clearSavedSession,
   loadCachedAvatarList,
   loadOscSettings,
@@ -164,6 +165,11 @@ const oscMessage = ref("");
 const settingsMessage = ref("");
 const isFetching = ref(false);
 const fetchMode = ref<"latest" | "full" | null>(null);
+const fetchProgress = ref<{ phase: "avatars" | "thumbnails"; fetched: number; total: number | null } | null>(null);
+let unlistenFetchProgress: UnlistenFn | null = null;
+const thumbnailCacheInFlight = ref(false);
+const pendingThumbnailAvatarIds = ref<string[]>([]);
+const visibleAvatarIds = ref<string[]>([]);
 
 function createSignedOutSession(): SessionState {
   return {
@@ -224,6 +230,51 @@ const selectedAvatar = computed(() => {
   return avatars.value.find((avatar) => avatar.id === selectedAvatarId.value) ?? null;
 });
 
+const fetchStatusText = computed(() => {
+  if (fetchMode.value === "latest") {
+    return `Fetching the latest ${uiSettings.value.latestFetchCount} avatars...`;
+  }
+
+  if (fetchMode.value !== "full") {
+    return "";
+  }
+
+  if (fetchProgress.value?.total != null) {
+    return `Fetching avatars... ${fetchProgress.value.fetched} / ${fetchProgress.value.total}`;
+  }
+
+  if ((fetchProgress.value?.fetched ?? 0) > 0) {
+    return `Fetching avatars... ${fetchProgress.value?.fetched} fetched`;
+  }
+
+  return "Fetching all avatars...";
+});
+
+const thumbnailStatusText = computed(() => {
+  if (isFetching.value || fetchProgress.value?.phase !== "thumbnails") {
+    return "";
+  }
+
+  if (fetchProgress.value.total != null) {
+    return `Caching visible thumbnails... ${fetchProgress.value.fetched} / ${fetchProgress.value.total}`;
+  }
+
+  return "Caching visible thumbnails...";
+});
+
+const prioritizedThumbnailAvatarIds = computed(() => {
+  const ids = visibleAvatarIds.value.filter((avatarId) => {
+    const avatar = filteredAvatars.value.find((item) => item.id === avatarId);
+    return avatar && !avatar.thumbnailPath;
+  });
+
+  if (selectedAvatar.value && !selectedAvatar.value.thumbnailPath && !ids.includes(selectedAvatar.value.id)) {
+    ids.unshift(selectedAvatar.value.id);
+  }
+
+  return ids;
+});
+
 async function loadAvatars() {
   if (sessionState.value.status !== "authenticated") {
     return;
@@ -246,6 +297,38 @@ function applyAvatarPayload(payload: AvatarCachePayload) {
   };
 }
 
+async function processThumbnailCacheQueue() {
+  if (thumbnailCacheInFlight.value || pendingThumbnailAvatarIds.value.length === 0) {
+    return;
+  }
+
+  thumbnailCacheInFlight.value = true;
+
+  try {
+    while (pendingThumbnailAvatarIds.value.length > 0) {
+      const avatarIds = [...pendingThumbnailAvatarIds.value];
+      pendingThumbnailAvatarIds.value = [];
+      applyAvatarPayload(await cacheAvatarThumbnails(avatarIds));
+    }
+  } catch {
+  } finally {
+    thumbnailCacheInFlight.value = false;
+    if (fetchProgress.value?.phase === "thumbnails") {
+      fetchProgress.value = null;
+    }
+  }
+}
+
+function queueThumbnailCaching(avatarIds: string[]) {
+  if (sessionState.value.status !== "authenticated" || avatarIds.length === 0) {
+    return;
+  }
+
+  const merged = new Set([...pendingThumbnailAvatarIds.value, ...avatarIds]);
+  pendingThumbnailAvatarIds.value = [...merged];
+  void processThumbnailCacheQueue();
+}
+
 async function refreshSession() {
   try {
     sessionState.value = await verifySession();
@@ -263,6 +346,11 @@ function markPendingTwoFactor() {
 }
 
 onMounted(() => {
+  void listen<{ phase: "avatars" | "thumbnails"; fetched: number; total: number | null }>("avatar-fetch-progress", (event) => {
+    fetchProgress.value = event.payload;
+  }).then((unlisten) => {
+    unlistenFetchProgress = unlisten;
+  });
   try {
     const storedTerms = window.localStorage.getItem(SEARCH_TERMS_STORAGE_KEY);
     savedSearchTerms.value = storedTerms ? JSON.parse(storedTerms) : [];
@@ -298,6 +386,15 @@ onMounted(() => {
   void refreshSession();
 });
 
+onBeforeUnmount(() => {
+  if (!unlistenFetchProgress) {
+    return;
+  }
+
+  void unlistenFetchProgress();
+  unlistenFetchProgress = null;
+});
+
 watch(
   savedSearchTerms,
   (terms) => {
@@ -318,6 +415,14 @@ watch(
   { deep: true },
 );
 
+watch(
+  prioritizedThumbnailAvatarIds,
+  (avatarIds) => {
+    queueThumbnailCaching(avatarIds);
+  },
+  { immediate: true },
+);
+
 async function handleRefresh() {
   if (isFetching.value) {
     return;
@@ -325,6 +430,11 @@ async function handleRefresh() {
 
   isFetching.value = true;
   fetchMode.value = "full";
+  fetchProgress.value = {
+    phase: "avatars",
+    fetched: 0,
+    total: null,
+  };
   oscMessage.value = "";
 
   try {
@@ -332,6 +442,7 @@ async function handleRefresh() {
   } finally {
     isFetching.value = false;
     fetchMode.value = null;
+    fetchProgress.value = null;
   }
 }
 
@@ -342,6 +453,7 @@ async function handleQuickRefresh() {
 
   isFetching.value = true;
   fetchMode.value = "latest";
+  fetchProgress.value = null;
   oscMessage.value = "";
 
   try {

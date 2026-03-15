@@ -27,6 +27,7 @@ pub fn run() {
             commands::verify_session,
             commands::refresh_avatar_list,
             commands::refresh_latest_avatar_page,
+            commands::cache_avatar_thumbnails,
             commands::switch_avatar_via_osc,
             commands::open_external_url
         ])

@@ -58,6 +58,13 @@ pub struct AvatarCachePayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AvatarFetchProgress {
+    pub phase: String,
+    pub fetched: usize,
+    pub total: Option<usize>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OscSettings {
     pub enabled: bool,
     pub host: String,
