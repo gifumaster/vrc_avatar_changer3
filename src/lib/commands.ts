@@ -27,6 +27,7 @@ export type AvatarSummary = {
 };
 
 export type AvatarCachePayload = {
+  ownerUsername: string | null;
   avatars: AvatarSummary[];
   lastSyncedAt: string | null;
 };
@@ -41,6 +42,7 @@ export type LoginResult = {
   username: string;
   auth_token: string | null;
   two_factor_mode: "totp" | "emailotp" | null;
+  cacheReset: boolean;
 };
 
 export type SessionState = {

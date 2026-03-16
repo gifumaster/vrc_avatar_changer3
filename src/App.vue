@@ -10,11 +10,11 @@
           <div class="section-title">
             <p class="section-kicker">Avatar Changer</p>
             <div class="title-row">
-              <h2>{{ cacheState.itemCount }} avatars</h2>
+              <h2>{{ visibleAvatarCount }} avatars</h2>
               <button
                 class="ghost-button title-action-button"
                 type="button"
-                :disabled="filteredAvatars.length === 0"
+                :disabled="!showAvatarBrowser || filteredAvatars.length === 0"
                 @click="handleRandomAvatar"
               >
                 Random
@@ -34,20 +34,21 @@
             </div>
           </div>
           <div class="row">
-            <button class="ghost-button" type="button" :disabled="isFetching" @click="handleQuickRefresh">
+            <button class="ghost-button" type="button" :disabled="!showAvatarBrowser || isFetching" @click="handleQuickRefresh">
               {{
                 isFetching && fetchMode === "latest"
                   ? `Fetching Latest ${uiSettings.latestFetchCount}...`
                   : `Fetch Latest ${uiSettings.latestFetchCount}`
               }}
             </button>
-            <button class="ghost-button" type="button" :disabled="isFetching" @click="handleRefresh">
+            <button class="ghost-button" type="button" :disabled="!showAvatarBrowser || isFetching" @click="handleRefresh">
               {{ isFetching && fetchMode === "full" ? "Fetching All..." : "Fetch All Avatars" }}
             </button>
           </div>
         </section>
 
         <SearchToolbar
+          v-if="showAvatarBrowser"
           v-model:query="searchQuery"
           :saved-search-terms="savedSearchTerms"
           :active-search-terms="activeSearchTerms"
@@ -61,12 +62,14 @@
           @toggle-multi-tag="handleToggleMultiTag"
           @set-multi-tag-mode="handleSetMultiTagMode"
         />
-        <div v-if="isFetching" class="fetch-status">
+        <div v-if="showAvatarBrowser && isFetching" class="fetch-status">
           <span class="fetch-spinner" aria-hidden="true"></span>
           <span>{{ fetchStatusText }}</span>
         </div>
-        <p v-if="oscMessage" class="muted">{{ oscMessage }}</p>
+        <p v-if="showAvatarBrowser && oscMessage" class="muted">{{ oscMessage }}</p>
+        <p v-if="!showAvatarBrowser" class="muted">Sign in to load and browse your VRChat avatars.</p>
         <AvatarGrid
+          v-if="showAvatarBrowser"
           :avatars="filteredAvatars"
           :show-tags="uiSettings.tagsEnabled"
           :show-switch-button="uiSettings.switchButtonsEnabled"
@@ -94,7 +97,7 @@
           </div>
           <LoginCard
             :session="sessionState"
-            @signed-in="refreshSession"
+            @signed-in="handleSignedIn"
             @pending-two-factor="markPendingTwoFactor"
             @cleared="refreshSession"
           />
@@ -178,6 +181,18 @@ function createSignedOutSession(): SessionState {
     username: null,
     twoFactorRequired: false,
   };
+}
+
+function resetAvatarState() {
+  avatars.value = [];
+  cacheState.value = {
+    itemCount: 0,
+    lastSyncedAt: null,
+  };
+  selectedAvatarId.value = null;
+  visibleAvatarIds.value = [];
+  pendingThumbnailAvatarIds.value = [];
+  thumbnailCacheInFlight.value = false;
 }
 
 function isUnauthorizedError(error: unknown) {
@@ -265,6 +280,10 @@ const thumbnailStatusText = computed(() => {
   return isFetching.value ? "Refreshing latest thumbnails..." : "Caching visible thumbnails...";
 });
 
+const showAvatarBrowser = computed(() => sessionState.value.status === "authenticated");
+
+const visibleAvatarCount = computed(() => (showAvatarBrowser.value ? cacheState.value.itemCount : 0));
+
 const prioritizedThumbnailAvatarIds = computed(() => {
   const ids = visibleAvatarIds.value.filter((avatarId) => {
     const avatar = filteredAvatars.value.find((item) => item.id === avatarId);
@@ -332,12 +351,38 @@ function queueThumbnailCaching(avatarIds: string[]) {
   void processThumbnailCacheQueue();
 }
 
+async function loadCachedAvatarsForSession() {
+  if (!showAvatarBrowser.value) {
+    resetAvatarState();
+    return;
+  }
+
+  try {
+    const payload = await loadCachedAvatarList();
+    if (payload.ownerUsername && payload.ownerUsername !== sessionState.value.username) {
+      resetAvatarState();
+      return;
+    }
+
+    applyAvatarPayload(payload);
+  } catch {
+    resetAvatarState();
+  }
+}
+
 async function refreshSession() {
   try {
     sessionState.value = await verifySession();
   } catch {
     sessionState.value = createSignedOutSession();
   }
+
+  if (!showAvatarBrowser.value) {
+    resetAvatarState();
+    return;
+  }
+
+  await loadCachedAvatarsForSession();
 }
 
 function markPendingTwoFactor() {
@@ -390,17 +435,6 @@ onMounted(() => {
       oscState.value = settings;
     })
     .catch(() => {});
-  void loadCachedAvatarList()
-    .then((payload) => {
-      applyAvatarPayload(payload);
-    })
-    .catch(() => {
-      avatars.value = [];
-      cacheState.value = {
-        itemCount: 0,
-        lastSyncedAt: null,
-      };
-    });
   void refreshSession();
 });
 
@@ -483,6 +517,13 @@ async function handleQuickRefresh() {
   } finally {
     isFetching.value = false;
     fetchMode.value = null;
+  }
+}
+
+async function handleSignedIn(cacheReset: boolean) {
+  await refreshSession();
+  if (cacheReset) {
+    oscMessage.value = "Signed in with a different account. Avatar list cache was reset.";
   }
 }
 

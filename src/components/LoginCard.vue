@@ -89,7 +89,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  signedIn: [];
+  signedIn: [cacheReset: boolean];
   pendingTwoFactor: [];
   cleared: [];
 }>();
@@ -152,7 +152,7 @@ async function handleLogin() {
       return;
     }
 
-    emit("signedIn");
+    emit("signedIn", result.cacheReset);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "Failed to sign in.";
   } finally {
@@ -174,7 +174,7 @@ async function handleVerifyTwoFactor() {
 
     pendingAuthToken.value = "";
     twoFactorCode.value = "";
-    emit("signedIn");
+    emit("signedIn", false);
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "Failed to verify the two-factor code.";

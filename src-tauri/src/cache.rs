@@ -44,6 +44,7 @@ impl AvatarCache {
     pub fn load(&self) -> Result<AvatarCachePayload, String> {
         if !self.cache_file.exists() {
             return Ok(AvatarCachePayload {
+                owner_username: None,
                 avatars: Vec::new(),
                 last_synced_at: None,
             });
@@ -53,13 +54,19 @@ impl AvatarCache {
         serde_json::from_str::<AvatarCachePayload>(&json).map_err(|error| error.to_string())
     }
 
+    pub fn thumbnail_dir_path(&self) -> PathBuf {
+        self.thumbnail_dir.clone()
+    }
+
     pub fn store(
         &self,
+        owner_username: &str,
         avatars: Vec<AvatarSummary>,
         last_synced_at: String,
     ) -> Result<AvatarCachePayload, String> {
         let existing_payload = self.load()?;
         let payload = AvatarCachePayload {
+            owner_username: Some(owner_username.to_string()),
             avatars: merge_cached_fields(avatars, Some(&existing_payload.avatars)),
             last_synced_at: Some(last_synced_at),
         };
@@ -72,6 +79,7 @@ impl AvatarCache {
         &self,
         _client: &Client,
         _auth_token: &str,
+        owner_username: &str,
         avatars: Vec<AvatarSummary>,
         last_synced_at: String,
     ) -> Result<AvatarCachePayload, String> {
@@ -88,6 +96,7 @@ impl AvatarCache {
         );
 
         let payload = AvatarCachePayload {
+            owner_username: Some(owner_username.to_string()),
             avatars: merged,
             last_synced_at: Some(last_synced_at),
         };
@@ -184,6 +193,17 @@ impl AvatarCache {
             .ok_or_else(|| "Avatar was not found in cache".to_string())?;
 
         avatar.tags = tags;
+
+        self.write_payload(&payload)?;
+        Ok(payload)
+    }
+
+    pub fn clear_avatar_list(&self) -> Result<AvatarCachePayload, String> {
+        let payload = AvatarCachePayload {
+            owner_username: None,
+            avatars: Vec::new(),
+            last_synced_at: None,
+        };
 
         self.write_payload(&payload)?;
         Ok(payload)

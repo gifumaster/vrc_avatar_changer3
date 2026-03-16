@@ -50,10 +50,14 @@ pub struct LoginResult {
     pub username: String,
     pub auth_token: Option<String>,
     pub two_factor_mode: Option<String>,
+    #[serde(rename = "cacheReset")]
+    pub cache_reset: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AvatarCachePayload {
+    #[serde(rename = "ownerUsername", default)]
+    pub owner_username: Option<String>,
     pub avatars: Vec<AvatarSummary>,
     #[serde(rename = "lastSyncedAt")]
     pub last_synced_at: Option<String>,

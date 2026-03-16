@@ -54,9 +54,20 @@ pub async fn login_vrchat(request: LoginRequest) -> Result<LoginResult, String> 
     let result = VrchatClient::new()
         .login(&request.username, &request.password)
         .await?;
+    let mut cache_reset = false;
 
     if result.status == "authenticated" {
         if let Some(auth_token) = &result.auth_token {
+            let cache = AvatarCache::new()?;
+            let cached_payload = cache.load()?;
+            let should_reset_cache = cached_payload
+                .owner_username
+                .as_deref()
+                .is_some_and(|owner_username| owner_username != result.username);
+            if should_reset_cache {
+                cache.clear_avatar_list()?;
+                cache_reset = true;
+            }
             CredentialStore::new()?.save_session(&StoredSession {
                 username: result.username.clone(),
                 auth_token: auth_token.clone(),
@@ -64,7 +75,7 @@ pub async fn login_vrchat(request: LoginRequest) -> Result<LoginResult, String> 
         }
     }
 
-    Ok(result)
+    Ok(LoginResult { cache_reset, ..result })
 }
 
 #[tauri::command]
@@ -76,6 +87,16 @@ pub async fn submit_two_factor(request: TwoFactorRequest) -> Result<SessionState
 
     if !verified {
         return Err("Two-factor verification was rejected".to_string());
+    }
+
+    let cache = AvatarCache::new()?;
+    let cached_payload = cache.load()?;
+    let should_reset_cache = cached_payload
+        .owner_username
+        .as_deref()
+        .is_some_and(|owner_username| owner_username != request.username);
+    if should_reset_cache {
+        cache.clear_avatar_list()?;
     }
 
     CredentialStore::new()?.save_session(&StoredSession {
@@ -138,7 +159,7 @@ pub async fn refresh_avatar_list(app: tauri::AppHandle) -> Result<AvatarCachePay
         .await?;
     let cache = AvatarCache::new()?;
 
-    cache.store(avatars, chrono::Utc::now().to_rfc3339())
+    cache.store(&session.username, avatars, chrono::Utc::now().to_rfc3339())
 }
 
 #[tauri::command]
@@ -176,6 +197,7 @@ pub async fn refresh_latest_avatar_page(
         .store_partial(
             &client.http_client(),
             &session.auth_token,
+            &session.username,
             avatars,
             chrono::Utc::now().to_rfc3339(),
         )

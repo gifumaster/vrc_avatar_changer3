@@ -120,6 +120,7 @@ impl VrchatClient {
             username: body.username.unwrap_or_else(|| username.to_string()),
             auth_token: Some(auth_token),
             two_factor_mode,
+            cache_reset: false,
         })
     }
 
