@@ -5,6 +5,15 @@
         <div class="dialog-body-grid">
           <div class="dialog-side">
             <div class="dialog-image-wrap">
+              <button
+                class="favorite-button favorite-button-detail"
+                :class="{ 'favorite-button-active': isFavorite }"
+                type="button"
+                :aria-label="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+                @click="emit('toggle-favorite', props.avatar.id)"
+              >
+                ★
+              </button>
               <img
                 v-if="thumbnailSrc"
                 :src="thumbnailSrc"
@@ -102,6 +111,7 @@ const props = defineProps<{
   avatar: AvatarSummary | null;
   tagsEnabled: boolean;
   tagSuggestions: string[];
+  isFavorite: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -109,6 +119,7 @@ const emit = defineEmits<{
   "switch-avatar": [avatarId: string];
   "save-tags": [payload: { avatarId: string; tags: string[] }];
   "refresh-avatar": [payload: AvatarCachePayload];
+  "toggle-favorite": [avatarId: string];
 }>();
 
 const draftTag = ref("");

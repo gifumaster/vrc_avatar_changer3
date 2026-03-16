@@ -67,10 +67,9 @@
         <strong>{{ session.username }}</strong>
       </div>
       <div class="card-actions">
-        <button class="ghost-button" type="button" :disabled="busy" @click="handleClear">
+        <button class="ghost-button ghost-button-compact" type="button" :disabled="busy" @click="handleClear">
           {{ busy ? "Signing out..." : "Sign out" }}
         </button>
-        <span class="muted">The saved token will be verified again on the next app launch.</span>
       </div>
     </template>
 

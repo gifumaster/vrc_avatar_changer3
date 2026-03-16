@@ -7,6 +7,15 @@
       class="card avatar-card"
     >
       <div class="avatar-thumb avatar-clickable" @click="emit('select-avatar', avatar.id)">
+        <button
+          class="favorite-button"
+          :class="{ 'favorite-button-active': props.favoriteAvatarIds.includes(avatar.id) }"
+          type="button"
+          :aria-label="props.favoriteAvatarIds.includes(avatar.id) ? 'Remove from favorites' : 'Add to favorites'"
+          @click.stop="emit('toggle-favorite', avatar.id)"
+        >
+          ★
+        </button>
         <img
           v-if="thumbnailSrc(avatar)"
           :src="thumbnailSrc(avatar) ?? undefined"
@@ -42,11 +51,13 @@ const props = defineProps<{
   avatars: AvatarSummary[];
   showTags: boolean;
   showSwitchButton: boolean;
+  favoriteAvatarIds: string[];
 }>();
 
 const emit = defineEmits<{
   "select-avatar": [avatarId: string];
   "switch-avatar": [avatarId: string];
+  "toggle-favorite": [avatarId: string];
   "visible-avatar-ids": [avatarIds: string[]];
 }>();
 

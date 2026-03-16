@@ -1,6 +1,6 @@
 [package]
 name = "avatar_changer"
-version = "0.1.8"
+version = "0.1.9"
 description = "VRChat avatar manager for Windows"
 authors = ["gifum"]
 edition = "2021"

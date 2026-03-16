@@ -73,8 +73,10 @@
           :avatars="filteredAvatars"
           :show-tags="uiSettings.tagsEnabled"
           :show-switch-button="uiSettings.switchButtonsEnabled"
+          :favorite-avatar-ids="favoriteAvatarIds"
           @select-avatar="selectedAvatarId = $event"
           @switch-avatar="handleSwitchAvatar"
+          @toggle-favorite="toggleFavoriteAvatar"
           @visible-avatar-ids="visibleAvatarIds = $event"
         />
         <AvatarDialog
@@ -82,26 +84,45 @@
           :avatar="selectedAvatar"
           :tags-enabled="uiSettings.tagsEnabled"
           :tag-suggestions="availableTagSuggestions"
+          :is-favorite="selectedAvatar ? favoriteAvatarIdSet.has(selectedAvatar.id) : false"
           @close="selectedAvatarId = null"
           @refresh-avatar="applyAvatarPayload"
           @save-tags="handleSaveTags"
           @switch-avatar="handleDialogSwitchAvatar"
+          @toggle-favorite="toggleFavoriteAvatar"
         />
       </section>
 
       <aside class="sidebar-panel" :class="{ 'sidebar-panel-open': sidebarOpen }">
         <section class="sidebar">
-          <div class="sidebar-header">
-            <button class="ghost-button sidebar-close-button" type="button" @click="sidebarOpen = false">
-              Close Panel
-            </button>
-          </div>
+            <div class="sidebar-header">
+              <button class="ghost-button sidebar-close-button" type="button" @click="sidebarOpen = false">
+                <span class="sidebar-close-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none">
+                    <path
+                      d="M11.75 5.5 7.25 10l4.5 4.5"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.8"
+                    />
+                  </svg>
+                </span>
+                <span>Close Panel</span>
+              </button>
+            </div>
           <LoginCard
             :session="sessionState"
             @signed-in="handleSignedIn"
             @pending-two-factor="markPendingTwoFactor"
             @cleared="refreshSession"
           />
+          <section class="card stack">
+            <div>
+              <p class="section-kicker">Favorites</p>
+              <h3>{{ favoriteAvatarCount }} / {{ MAX_FAVORITE_AVATAR_COUNT }}</h3>
+            </div>
+          </section>
           <SettingsCard :osc="oscState" :ui="uiSettings" :message="settingsMessage" @save="handleSaveSettings" />
         </section>
       </aside>
@@ -144,6 +165,8 @@ const sidebarOpen = ref(false);
 const selectedAvatarId = ref<string | null>(null);
 const SEARCH_TERMS_STORAGE_KEY = "avatar-changer.search-terms";
 const UI_SETTINGS_STORAGE_KEY = "avatar-changer.ui-settings";
+const FAVORITE_AVATAR_IDS_STORAGE_KEY = "avatar-changer.favorite-avatar-ids";
+const MAX_FAVORITE_AVATAR_COUNT = 100;
 
 const sessionState = ref<SessionState>({
   status: "signed_out",
@@ -175,6 +198,7 @@ let unlistenFetchProgress: UnlistenFn | null = null;
 const thumbnailCacheInFlight = ref(false);
 const pendingThumbnailAvatarIds = ref<string[]>([]);
 const visibleAvatarIds = ref<string[]>([]);
+const favoriteAvatarIds = ref<string[]>([]);
 
 function createSignedOutSession(): SessionState {
   return {
@@ -220,18 +244,27 @@ async function signOutExpiredSession() {
 const filteredAvatars = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   const requiredTerms = [query, ...activeSearchTerms.value.map((term) => term.trim().toLowerCase())].filter(Boolean);
-  return avatars.value.filter((avatar) => {
-    const text = `${avatar.name} ${avatar.description} ${avatar.tags.join(" ")}`.toLowerCase();
-    const matchesQuery = requiredTerms.length === 0 || requiredTerms.every((term) => text.includes(term));
-    const { multiTags } = splitTags(avatar.tags);
-    const matchesMulti =
-      activeMultiTags.value.length === 0 ||
-      (multiTagMode.value === "all"
-        ? activeMultiTags.value.every((tag) => multiTags.includes(tag))
-        : activeMultiTags.value.some((tag) => multiTags.includes(tag)));
-    return matchesQuery && matchesMulti;
-  });
+  return avatars.value
+    .filter((avatar) => {
+      const text = `${avatar.name} ${avatar.description} ${avatar.tags.join(" ")}`.toLowerCase();
+      const matchesQuery = requiredTerms.length === 0 || requiredTerms.every((term) => text.includes(term));
+      const { multiTags } = splitTags(avatar.tags);
+      const matchesMulti =
+        activeMultiTags.value.length === 0 ||
+        (multiTagMode.value === "all"
+          ? activeMultiTags.value.every((tag) => multiTags.includes(tag))
+          : activeMultiTags.value.some((tag) => multiTags.includes(tag)));
+      return matchesQuery && matchesMulti;
+    })
+    .sort((left, right) => {
+      const leftFavorite = favoriteAvatarIdSet.value.has(left.id) ? 1 : 0;
+      const rightFavorite = favoriteAvatarIdSet.value.has(right.id) ? 1 : 0;
+      return rightFavorite - leftFavorite;
+    });
 });
+
+const favoriteAvatarIdSet = computed(() => new Set(favoriteAvatarIds.value));
+const favoriteAvatarCount = computed(() => favoriteAvatarIds.value.length);
 
 const availableMultiTags = computed(() => {
   return [...new Set([...avatars.value.flatMap((avatar) => splitTags(avatar.tags).multiTags), ...activeMultiTags.value])].sort(
@@ -437,6 +470,12 @@ onMounted(() => {
       latestFetchCount: 20,
     };
   }
+  try {
+    const storedFavoriteAvatarIds = window.localStorage.getItem(FAVORITE_AVATAR_IDS_STORAGE_KEY);
+    favoriteAvatarIds.value = storedFavoriteAvatarIds ? JSON.parse(storedFavoriteAvatarIds).slice(0, MAX_FAVORITE_AVATAR_COUNT) : [];
+  } catch {
+    favoriteAvatarIds.value = [];
+  }
   void loadOscSettings()
     .then((settings) => {
       oscState.value = settings;
@@ -470,6 +509,14 @@ watch(
     if (!nextUiSettings.tagsEnabled) {
       activeMultiTags.value = [];
     }
+  },
+  { deep: true },
+);
+
+watch(
+  favoriteAvatarIds,
+  (nextFavoriteAvatarIds) => {
+    window.localStorage.setItem(FAVORITE_AVATAR_IDS_STORAGE_KEY, JSON.stringify(nextFavoriteAvatarIds));
   },
   { deep: true },
 );
@@ -549,6 +596,20 @@ async function handleSaveTags(payload: { avatarId: string; tags: string[] }) {
     applyAvatarPayload(await saveAvatarTags(payload.avatarId, payload.tags));
   } catch {
   }
+}
+
+function toggleFavoriteAvatar(avatarId: string) {
+  if (favoriteAvatarIdSet.value.has(avatarId)) {
+    favoriteAvatarIds.value = favoriteAvatarIds.value.filter((id) => id !== avatarId);
+    return;
+  }
+
+  if (favoriteAvatarIds.value.length >= MAX_FAVORITE_AVATAR_COUNT) {
+    oscMessage.value = `Favorites are limited to ${MAX_FAVORITE_AVATAR_COUNT} avatars.`;
+    return;
+  }
+
+  favoriteAvatarIds.value = [...favoriteAvatarIds.value, avatarId];
 }
 
 function handleToggleMultiTag(tag: string) {

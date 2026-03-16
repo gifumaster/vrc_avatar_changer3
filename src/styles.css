@@ -112,7 +112,64 @@ input {
 }
 
 .sidebar-close-button {
-  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(86, 96, 255, 0.18);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 243, 255, 0.92));
+  color: #3d4674;
+  box-shadow:
+    0 10px 24px rgba(41, 52, 120, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.sidebar-close-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(86, 96, 255, 0.32);
+  color: #2f3762;
+  box-shadow:
+    0 14px 28px rgba(41, 52, 120, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.sidebar-close-button:focus-visible {
+  outline: none;
+  border-color: rgba(76, 89, 255, 0.45);
+  box-shadow:
+    0 0 0 4px rgba(86, 96, 255, 0.12),
+    0 14px 28px rgba(41, 52, 120, 0.14);
+}
+
+.sidebar-close-button:active {
+  transform: translateY(0);
+  box-shadow:
+    0 8px 18px rgba(41, 52, 120, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.sidebar-close-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #5f6bff, #7a84ff);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.sidebar-close-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .card {
@@ -354,6 +411,10 @@ input {
   color: #204662;
 }
 
+.ghost-button-compact {
+  padding: 8px 12px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 208px);
@@ -455,6 +516,26 @@ input {
   transform: translateY(0);
 }
 
+.favorite-button {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #8b9aaa;
+  font-size: 1rem;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(15, 23, 31, 0.12);
+}
+
+.favorite-button-active {
+  color: #f1b400;
+}
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -493,6 +574,7 @@ input {
 }
 
 .dialog-image-wrap {
+  position: relative;
   aspect-ratio: 4 / 3;
   max-width: 260px;
   background: #eef2f6;
@@ -510,6 +592,11 @@ input {
   display: grid;
   place-items: center;
   color: #4c6073;
+}
+
+.favorite-button-detail {
+  top: 12px;
+  left: 12px;
 }
 
 .dialog-body {
