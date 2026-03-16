@@ -2,45 +2,72 @@
   <Teleport to="body">
     <div v-if="open && props.avatar" class="dialog-backdrop" @click.self="emit('close')">
       <section class="dialog-card">
-        <div class="dialog-image-wrap">
-          <img
-            v-if="thumbnailSrc"
-            :src="thumbnailSrc"
-            :alt="props.avatar.name"
-            class="dialog-image"
-            referrerpolicy="no-referrer"
-          />
-          <div v-else class="dialog-image dialog-image-empty">No thumbnail</div>
-        </div>
-
-        <div class="dialog-body">
-          <h3>{{ props.avatar.name }}</h3>
-          <p class="dialog-description">{{ props.avatar.description || "No description" }}</p>
-          <section v-if="tagsEnabled" class="tag-editor">
-            <div class="tag-editor-row">
-              <input
-                v-model="draftTag"
-                class="text-input"
-                type="text"
-                placeholder="Add tag"
-                @keydown.enter.prevent="handleAddTag"
+        <div class="dialog-body-grid">
+          <div class="dialog-side">
+            <div class="dialog-image-wrap">
+              <img
+                v-if="thumbnailSrc"
+                :src="thumbnailSrc"
+                :alt="props.avatar.name"
+                class="dialog-image"
+                referrerpolicy="no-referrer"
               />
-              <button class="ghost-button" type="button" @click="handleAddTag">Add Tag</button>
+              <div v-else class="dialog-image dialog-image-empty">No thumbnail</div>
             </div>
 
-            <div v-if="multiTags.length > 0" class="tag-pill-row">
-              <button
-                v-for="tag in multiTags"
-                :key="tag"
-                class="tag-pill"
-                type="button"
-                @click="handleRemoveTag(tag)"
-              >
-                {{ tag }} x
-              </button>
+            <div class="dialog-summary">
+              <h3>{{ props.avatar.name }}</h3>
+              <p class="dialog-description">{{ props.avatar.description || "No description" }}</p>
+              <div class="tag-section">
+                <p class="tag-section-title">Current tags</p>
+                <div v-if="multiTags.length > 0" class="tag-pill-row">
+                  <button
+                    v-for="tag in multiTags"
+                    :key="tag"
+                    class="tag-pill"
+                    type="button"
+                    @click="handleRemoveTag(tag)"
+                  >
+                    {{ tag }} x
+                  </button>
+                </div>
+              </div>
             </div>
-            <p v-else class="muted">No tags yet</p>
-          </section>
+          </div>
+
+          <div class="dialog-body">
+            <section v-if="tagsEnabled" class="tag-editor">
+              <div class="tag-editor-row">
+                <input
+                  v-model="draftTag"
+                  class="text-input"
+                  type="text"
+                  placeholder="Add tag"
+                  @keydown.enter.prevent="handleAddTag"
+                />
+                <button class="ghost-button" type="button" @click="handleAddTag()">Add Tag</button>
+              </div>
+
+              <section class="tag-candidate-panel">
+                <div class="tag-candidate-header">
+                  <p class="tag-section-title">Existing tags</p>
+                  <span class="muted">{{ filteredTagSuggestions.length }} shown</span>
+                </div>
+                <div v-if="filteredTagSuggestions.length > 0" class="tag-cloud">
+                  <button
+                    v-for="tag in filteredTagSuggestions"
+                    :key="tag"
+                    class="tag-pill tag-pill-candidate"
+                    type="button"
+                    @click="handleAddTag(tag)"
+                  >
+                    {{ tag }}
+                  </button>
+                </div>
+                <p v-else class="muted">No matching existing tags.</p>
+              </section>
+            </section>
+          </div>
         </div>
 
         <div class="dialog-actions">
@@ -74,6 +101,7 @@ const props = defineProps<{
   open: boolean;
   avatar: AvatarSummary | null;
   tagsEnabled: boolean;
+  tagSuggestions: string[];
 }>();
 
 const emit = defineEmits<{
@@ -87,6 +115,7 @@ const draftTag = ref("");
 const editableTags = ref<string[]>([]);
 const busy = ref(false);
 const errorMessage = ref("");
+const avatarTags = computed(() => props.avatar?.tags ?? []);
 
 const thumbnailSrc = computed(() => {
   if (!props.avatar) {
@@ -110,13 +139,16 @@ const vrchatUrl = computed(() => {
 });
 
 const multiTags = computed(() => splitTags(editableTags.value).multiTags);
+const filteredTagSuggestions = computed(() => props.tagSuggestions.filter((tag) => !editableTags.value.includes(tag)).slice(0, 30));
 
 watch(
   () => [props.open, props.avatar?.id, props.avatar?.tags] as const,
-  () => {
-    editableTags.value = props.avatar?.tags ? [...props.avatar.tags] : [];
-    draftTag.value = "";
-    errorMessage.value = "";
+  (current, previous) => {
+    const [open, avatarId] = current;
+    const previousOpen = previous?.[0] ?? false;
+    const previousAvatarId = previous?.[1] ?? null;
+
+    resetEditorState();
   },
   { immediate: true },
 );
@@ -146,8 +178,8 @@ async function handleRefreshAvatar() {
   }
 }
 
-function handleAddTag() {
-  const nextTags = addMultiTag(editableTags.value, draftTag.value);
+function handleAddTag(tag = draftTag.value) {
+  const nextTags = addMultiTag(editableTags.value, tag);
   if (nextTags === editableTags.value) {
     return;
   }
@@ -171,5 +203,11 @@ function emitSaveTags() {
     avatarId: props.avatar.id,
     tags: editableTags.value,
   });
+}
+
+function resetEditorState() {
+  editableTags.value = [...avatarTags.value];
+  draftTag.value = "";
+  errorMessage.value = "";
 }
 </script>

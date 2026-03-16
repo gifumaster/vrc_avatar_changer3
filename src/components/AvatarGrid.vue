@@ -15,19 +15,18 @@
           referrerpolicy="no-referrer"
         />
         <span v-else>No thumbnail yet</span>
-      </div>
-      <div class="avatar-copy">
-        <h3>{{ avatar.name }}</h3>
-        <p>{{ avatar.description }}</p>
-        <p v-if="showTags" class="meta">{{ avatar.tags.length > 0 ? avatar.tags.join(" / ") : "No tags yet" }}</p>
         <button
           v-if="showSwitchButton"
-          class="primary-button avatar-action"
+          class="primary-button avatar-thumb-action"
           type="button"
           @click.stop="emit('switch-avatar', avatar.id)"
         >
           Switch
         </button>
+      </div>
+      <div class="avatar-copy">
+        <h3>{{ avatar.name }}</h3>
+        <p v-if="showTags && avatar.tags.length > 0" class="meta">{{ avatar.tags.join(" / ") }}</p>
       </div>
     </article>
   </div>

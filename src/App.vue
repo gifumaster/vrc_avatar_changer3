@@ -81,6 +81,7 @@
           :open="selectedAvatar !== null"
           :avatar="selectedAvatar"
           :tags-enabled="uiSettings.tagsEnabled"
+          :tag-suggestions="availableTagSuggestions"
           @close="selectedAvatarId = null"
           @refresh-avatar="applyAvatarPayload"
           @save-tags="handleSaveTags"
@@ -235,6 +236,12 @@ const filteredAvatars = computed(() => {
 const availableMultiTags = computed(() => {
   return [...new Set([...avatars.value.flatMap((avatar) => splitTags(avatar.tags).multiTags), ...activeMultiTags.value])].sort(
     (left, right) => left.localeCompare(right),
+  );
+});
+
+const availableTagSuggestions = computed(() => {
+  return [...new Set(avatars.value.flatMap((avatar) => splitTags(avatar.tags).multiTags))].sort((left, right) =>
+    left.localeCompare(right),
   );
 });
 
