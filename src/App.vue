@@ -1,8 +1,18 @@
 <template>
   <div class="app-shell">
-    <div v-if="thumbnailStatusText" class="floating-status">
-      <span class="fetch-spinner" aria-hidden="true"></span>
-      <span>{{ thumbnailStatusText }}</span>
+    <div v-if="thumbnailStatusText || toastMessage" class="floating-status-stack" aria-live="polite" aria-atomic="true">
+      <div v-if="fetchStatusText" class="floating-status">
+        <span class="fetch-spinner" aria-hidden="true"></span>
+        <span>{{ fetchStatusText }}</span>
+      </div>
+      <div v-if="thumbnailStatusText" class="floating-status">
+        <span class="fetch-spinner" aria-hidden="true"></span>
+        <span>{{ thumbnailStatusText }}</span>
+      </div>
+      <div v-if="toastMessage" class="floating-status floating-status-toast" :data-tone="toastTone">
+        <span class="toast-indicator" aria-hidden="true"></span>
+        <span>{{ toastMessage }}</span>
+      </div>
     </div>
     <main class="layout">
       <section class="panel-wide main-shell">
@@ -62,11 +72,6 @@
           @toggle-multi-tag="handleToggleMultiTag"
           @set-multi-tag-mode="handleSetMultiTagMode"
         />
-        <div v-if="showAvatarBrowser && isFetching" class="fetch-status">
-          <span class="fetch-spinner" aria-hidden="true"></span>
-          <span>{{ fetchStatusText }}</span>
-        </div>
-        <p v-if="showAvatarBrowser && oscMessage" class="muted">{{ oscMessage }}</p>
         <p v-if="!showAvatarBrowser" class="muted">Sign in to load and browse your VRChat avatars.</p>
         <AvatarGrid
           v-if="showAvatarBrowser"
@@ -189,12 +194,14 @@ const uiSettings = ref<UiSettings>({
   switchButtonsEnabled: false,
   latestFetchCount: 20,
 });
-const oscMessage = ref("");
+const toastMessage = ref("");
+const toastTone = ref<"info" | "success" | "error">("info");
 const settingsMessage = ref("");
 const isFetching = ref(false);
 const fetchMode = ref<"latest" | "full" | null>(null);
 const fetchProgress = ref<{ phase: "avatars" | "thumbnails"; fetched: number; total: number | null } | null>(null);
 let unlistenFetchProgress: UnlistenFn | null = null;
+let toastTimeout: number | null = null;
 const thumbnailCacheInFlight = ref(false);
 const pendingThumbnailAvatarIds = ref<string[]>([]);
 const visibleAvatarIds = ref<string[]>([]);
@@ -218,6 +225,29 @@ function resetAvatarState() {
   visibleAvatarIds.value = [];
   pendingThumbnailAvatarIds.value = [];
   thumbnailCacheInFlight.value = false;
+}
+
+function clearToast() {
+  if (toastTimeout !== null) {
+    window.clearTimeout(toastTimeout);
+    toastTimeout = null;
+  }
+
+  toastMessage.value = "";
+}
+
+function showToast(message: string, tone: "info" | "success" | "error" = "info", duration = 3600) {
+  clearToast();
+  toastTone.value = tone;
+  toastMessage.value = message;
+  if (duration <= 0) {
+    return;
+  }
+
+  toastTimeout = window.setTimeout(() => {
+    toastMessage.value = "";
+    toastTimeout = null;
+  }, duration);
 }
 
 function isUnauthorizedError(error: unknown) {
@@ -485,6 +515,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearToast();
   if (!unlistenFetchProgress) {
     return;
   }
@@ -541,7 +572,7 @@ async function handleRefresh() {
     fetched: 0,
     total: null,
   };
-  oscMessage.value = "";
+  clearToast();
 
   try {
     await loadAvatars();
@@ -560,7 +591,7 @@ async function handleQuickRefresh() {
   isFetching.value = true;
   fetchMode.value = "latest";
   fetchProgress.value = null;
-  oscMessage.value = "";
+  clearToast();
 
   try {
     applyAvatarPayload(await refreshLatestAvatarPage(uiSettings.value.latestFetchCount));
@@ -577,13 +608,13 @@ async function handleQuickRefresh() {
 async function handleSignedIn(cacheReset: boolean) {
   await refreshSession();
   if (cacheReset) {
-    oscMessage.value = "Signed in with a different account. Avatar list cache was reset.";
+    showToast("Signed in with a different account. Avatar list cache was reset.", "info");
   }
 }
 
 function handleRandomAvatar() {
   if (filteredAvatars.value.length === 0) {
-    oscMessage.value = "No avatars match the current search or tag filters.";
+    showToast("No avatars match the current search or tag filters.", "info");
     return;
   }
 
@@ -605,7 +636,7 @@ function toggleFavoriteAvatar(avatarId: string) {
   }
 
   if (favoriteAvatarIds.value.length >= MAX_FAVORITE_AVATAR_COUNT) {
-    oscMessage.value = `Favorites are limited to ${MAX_FAVORITE_AVATAR_COUNT} avatars.`;
+    showToast(`Favorites are limited to ${MAX_FAVORITE_AVATAR_COUNT} avatars.`, "info");
     return;
   }
 
@@ -644,9 +675,9 @@ function handleRemoveSearchTerm(term: string) {
 async function handleSwitchAvatar(avatarId: string) {
   try {
     await switchAvatarViaOsc(avatarId);
-    oscMessage.value = `Sent /avatar/change for ${avatarId}`;
+    showToast(`Sent /avatar/change for ${avatarId}`, "success");
   } catch (error) {
-    oscMessage.value = error instanceof Error ? error.message : "Failed to send OSC message.";
+    showToast(error instanceof Error ? error.message : "Failed to send OSC message.", "error", 4800);
   }
 }
 

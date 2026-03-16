@@ -1,99 +1,105 @@
 <template>
   <Teleport to="body">
     <div v-if="open && props.avatar" class="dialog-backdrop" @click.self="emit('close')">
-      <section class="dialog-card">
-        <div class="dialog-body-grid">
-          <div class="dialog-side">
-            <div class="dialog-image-wrap">
-              <button
-                class="favorite-button favorite-button-detail"
-                :class="{ 'favorite-button-active': isFavorite }"
-                type="button"
-                :aria-label="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
-                @click="emit('toggle-favorite', props.avatar.id)"
-              >
-                ★
-              </button>
-              <img
-                v-if="thumbnailSrc"
-                :src="thumbnailSrc"
-                :alt="props.avatar.name"
-                class="dialog-image"
-                referrerpolicy="no-referrer"
-              />
-              <div v-else class="dialog-image dialog-image-empty">No thumbnail</div>
-            </div>
-
-            <div class="dialog-summary">
-              <h3>{{ props.avatar.name }}</h3>
-              <p class="dialog-description">{{ props.avatar.description || "No description" }}</p>
-              <div class="tag-section">
-                <p class="tag-section-title">Current tags</p>
-                <div v-if="multiTags.length > 0" class="tag-pill-row">
-                  <button
-                    v-for="tag in multiTags"
-                    :key="tag"
-                    class="tag-pill"
-                    type="button"
-                    @click="handleRemoveTag(tag)"
-                  >
-                    {{ tag }} x
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="dialog-body">
-            <section v-if="tagsEnabled" class="tag-editor">
-              <div class="tag-editor-row">
-                <input
-                  v-model="draftTag"
-                  class="text-input"
-                  type="text"
-                  placeholder="Add tag"
-                  @keydown.enter.prevent="handleAddTag"
+      <div class="dialog-frame">
+        <button class="dialog-close-button" type="button" aria-label="Close dialog" @click="emit('close')">
+          ✕
+        </button>
+        <section class="dialog-card">
+          <div class="dialog-body-grid">
+            <div class="dialog-side">
+              <div class="dialog-image-wrap">
+                <button
+                  class="favorite-button favorite-button-detail"
+                  :class="{ 'favorite-button-active': isFavorite }"
+                  type="button"
+                  :aria-label="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+                  @click="emit('toggle-favorite', props.avatar.id)"
+                >
+                  ★
+                </button>
+                <img
+                  v-if="thumbnailSrc"
+                  :src="thumbnailSrc"
+                  :alt="props.avatar.name"
+                  class="dialog-image"
+                  referrerpolicy="no-referrer"
                 />
-                <button class="ghost-button" type="button" @click="handleAddTag()">Add Tag</button>
+                <div v-else class="dialog-image dialog-image-empty">No thumbnail</div>
               </div>
 
-              <section class="tag-candidate-panel">
-                <div class="tag-candidate-header">
-                  <p class="tag-section-title">Existing tags</p>
-                  <span class="muted">{{ filteredTagSuggestions.length }} shown</span>
+              <div class="dialog-summary">
+                <h3>{{ props.avatar.name }}</h3>
+                <p class="dialog-description">{{ props.avatar.description || "No description" }}</p>
+                <div class="tag-section">
+                  <p class="tag-section-title">Current tags</p>
+                  <div v-if="multiTags.length > 0" class="tag-pill-row">
+                    <button
+                      v-for="tag in multiTags"
+                      :key="tag"
+                      class="tag-pill"
+                      type="button"
+                      @click="handleRemoveTag(tag)"
+                    >
+                      {{ tag }} x
+                    </button>
+                  </div>
                 </div>
-                <div v-if="filteredTagSuggestions.length > 0" class="tag-cloud">
-                  <button
-                    v-for="tag in filteredTagSuggestions"
-                    :key="tag"
-                    class="tag-pill tag-pill-candidate"
-                    type="button"
-                    @click="handleAddTag(tag)"
-                  >
-                    {{ tag }}
-                  </button>
+              </div>
+            </div>
+
+            <div class="dialog-body">
+              <section v-if="tagsEnabled" class="tag-editor">
+                <div class="tag-editor-row">
+                  <input
+                    v-model="draftTag"
+                    class="text-input"
+                    type="text"
+                    placeholder="Add tag"
+                    @keydown.enter.prevent="handleAddTag"
+                  />
+                  <button class="ghost-button" type="button" @click="handleAddTag()">Add Tag</button>
                 </div>
-                <p v-else class="muted">No matching existing tags.</p>
+
+                <section class="tag-candidate-panel">
+                  <div class="tag-candidate-header">
+                    <p class="tag-section-title">Existing tags</p>
+                    <span class="muted">{{ filteredTagSuggestions.length }} shown</span>
+                  </div>
+                  <div v-if="filteredTagSuggestions.length > 0" class="tag-cloud">
+                    <button
+                      v-for="tag in filteredTagSuggestions"
+                      :key="tag"
+                      class="tag-pill tag-pill-candidate"
+                      type="button"
+                      @click="handleAddTag(tag)"
+                    >
+                      {{ tag }}
+                    </button>
+                  </div>
+                  <p v-else class="muted">No matching existing tags.</p>
+                </section>
               </section>
-            </section>
+            </div>
           </div>
-        </div>
 
-        <div class="dialog-actions">
-          <button class="ghost-button dialog-link" type="button" @click="handleOpenVrchat">
-            VRChat
-          </button>
-          <button class="ghost-button" type="button" :disabled="busy" @click="handleRefreshAvatar">
-            {{ busy ? "Refreshing..." : "Refresh" }}
-          </button>
-          <button class="primary-button" type="button" @click="emit('switch-avatar', props.avatar.id)">
-            Switch
-          </button>
-          <button class="ghost-button" type="button" @click="emit('close')">Close</button>
-        </div>
+          <div class="dialog-actions">
+            <div class="dialog-actions-group">
+              <button class="ghost-button dialog-link" type="button" @click="handleOpenVrchat">
+                VRChat
+              </button>
+              <button class="ghost-button" type="button" :disabled="busy" @click="handleRefreshAvatar">
+                {{ busy ? "更新中..." : "サムネイル更新" }}
+              </button>
+            </div>
+            <button class="primary-button" type="button" @click="emit('switch-avatar', props.avatar.id)">
+              Switch
+            </button>
+          </div>
 
-        <p v-if="errorMessage" class="error-text dialog-error">{{ errorMessage }}</p>
-      </section>
+          <p v-if="errorMessage" class="error-text dialog-error">{{ errorMessage }}</p>
+        </section>
+      </div>
     </div>
   </Teleport>
 </template>
