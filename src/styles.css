@@ -236,6 +236,22 @@ input {
   width: 100%;
 }
 
+.saved-search-chip-row .chip,
+.filter-stack .chip {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.filter-stack .chip-small {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.saved-search-chip-row .saved-search-remove {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 .fetch-status {
   display: inline-flex;
   align-items: center;
@@ -866,23 +882,49 @@ input {
   }
 
   .dialog-frame {
-    width: calc(100vw - 24px);
+    width: min(560px, calc(100vw - 56px));
+    max-height: calc(100vh - 72px);
   }
 
   .dialog-card {
-    max-height: calc(100vh - 24px);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 72px);
   }
 
   .dialog-body-grid {
     grid-template-columns: 1fr;
+    overflow-y: auto;
+    min-height: 0;
   }
 
   .dialog-side {
+    gap: 12px;
+    padding: 14px;
     border-right: none;
     border-bottom: 1px solid rgba(31, 35, 40, 0.08);
   }
 
   .dialog-image-wrap {
-    max-width: none;
+    width: min(100%, 220px);
+    max-width: 220px;
+    margin: 0 auto;
+  }
+
+  .dialog-body {
+    padding: 14px;
+  }
+
+  .dialog-actions {
+    flex-wrap: wrap;
+    padding: 8px 14px 14px;
+  }
+
+  .dialog-actions > .primary-button {
+    margin-left: auto;
+  }
+
+  .dialog-error {
+    padding: 0 14px 14px;
   }
 }
