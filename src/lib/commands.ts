@@ -57,6 +57,11 @@ export type OscSettings = {
   port: number;
 };
 
+export type AvatarSwitchSettings = {
+  method: "osc" | "api";
+  osc: OscSettings;
+};
+
 export async function login(input: LoginInput): Promise<LoginResult> {
   return invoke<LoginResult>("login_vrchat", { request: input });
 }
@@ -98,16 +103,16 @@ export async function refreshAvatarDetail(avatarId: string): Promise<AvatarCache
   return invoke<AvatarCachePayload>("refresh_avatar_detail", { avatarId });
 }
 
-export async function switchAvatarViaOsc(_avatarId: string): Promise<void> {
-  return invoke("switch_avatar_via_osc", { avatarId: _avatarId });
+export async function switchAvatar(_avatarId: string): Promise<void> {
+  return invoke("switch_avatar", { avatarId: _avatarId });
 }
 
-export async function loadOscSettings(): Promise<OscSettings> {
-  return invoke<OscSettings>("load_osc_settings");
+export async function loadSwitchSettings(): Promise<AvatarSwitchSettings> {
+  return invoke<AvatarSwitchSettings>("load_switch_settings");
 }
 
-export async function saveOscSettings(settings: OscSettings): Promise<OscSettings> {
-  return invoke<OscSettings>("save_osc_settings", { settings });
+export async function saveSwitchSettings(settings: AvatarSwitchSettings): Promise<AvatarSwitchSettings> {
+  return invoke<AvatarSwitchSettings>("save_switch_settings", { settings });
 }
 
 export async function loadSavedSession(): Promise<StoredSession | null> {

@@ -70,11 +70,33 @@ pub struct AvatarFetchProgress {
     pub total: Option<usize>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AvatarSwitchMethod {
+    Osc,
+    Api,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OscSettings {
     pub enabled: bool,
     pub host: String,
     pub port: u16,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AvatarSwitchSettings {
+    #[serde(default)]
+    pub method: AvatarSwitchMethod,
+    #[serde(default)]
+    pub osc: OscSettings,
+}
+
+impl Default for AvatarSwitchMethod {
+    fn default() -> Self {
+        Self::Osc
+    }
 }
 
 impl Default for OscSettings {
@@ -83,6 +105,15 @@ impl Default for OscSettings {
             enabled: true,
             host: "127.0.0.1".to_string(),
             port: 9000,
+        }
+    }
+}
+
+impl Default for AvatarSwitchSettings {
+    fn default() -> Self {
+        Self {
+            method: AvatarSwitchMethod::default(),
+            osc: OscSettings::default(),
         }
     }
 }

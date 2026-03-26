@@ -5,17 +5,29 @@
     </div>
 
     <label>
-      <span class="label">OSC Host</span>
-      <input v-model.trim="localHost" class="text-input" type="text" placeholder="127.0.0.1" />
+      <span class="label">Avatar Switch Method</span>
+      <select v-model="localMethod" class="text-input">
+        <option value="osc">OSC</option>
+        <option value="api">VRChat API</option>
+      </select>
     </label>
-    <label>
-      <span class="label">OSC Port</span>
-      <input v-model.number="localPort" class="text-input" type="number" min="1" max="65535" />
-    </label>
-    <label class="row">
-      <span>OSC Enabled</span>
-      <input v-model="localEnabled" type="checkbox" />
-    </label>
+    <p class="muted settings-hint">
+      {{
+        localMethod === "api"
+          ? "別PC/VR機器で動作中ならこちら。反映はやや遅く、クライアント側で反映されない場合があります。"
+          : "このPCで VRChat を起動しているときOSC機能で切り替えます。(推奨)"
+      }}
+    </p>
+    <div class="osc-settings-group" :class="{ 'osc-settings-disabled': localMethod !== 'osc' }">
+      <label>
+        <span class="label">OSC Host</span>
+        <input v-model.trim="localHost" class="text-input" type="text" placeholder="127.0.0.1" :disabled="localMethod !== 'osc'" />
+      </label>
+      <label>
+        <span class="label">OSC Port</span>
+        <input v-model.number="localPort" class="text-input" type="number" min="1" max="65535" :disabled="localMethod !== 'osc'" />
+      </label>
+    </div>
     <label class="row">
       <span>タグ機能を使う</span>
       <input v-model="localTagsEnabled" type="checkbox" />
@@ -45,32 +57,32 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 
-import type { OscState, UiSettings } from "@/types";
+import type { AvatarSwitchState, UiSettings } from "@/types";
 
 const props = defineProps<{
-  osc: OscState;
+  switchSettings: AvatarSwitchState;
   ui: UiSettings;
   message?: string;
 }>();
 
 const emit = defineEmits<{
-  save: [payload: { osc: OscState; ui: UiSettings }];
+  save: [payload: { switchSettings: AvatarSwitchState; ui: UiSettings }];
 }>();
 
-const localEnabled = ref(props.osc.enabled);
-const localHost = ref(props.osc.host);
-const localPort = ref(props.osc.port);
+const localMethod = ref(props.switchSettings.method);
+const localHost = ref(props.switchSettings.osc.host);
+const localPort = ref(props.switchSettings.osc.port);
 const localTagsEnabled = ref(props.ui.tagsEnabled);
 const localSwitchButtonsEnabled = ref(props.ui.switchButtonsEnabled);
 const localLatestFetchCount = ref<20 | 50 | 100>(props.ui.latestFetchCount);
 const busy = ref(false);
 
 watch(
-  () => props.osc,
-  (osc) => {
-    localEnabled.value = osc.enabled;
-    localHost.value = osc.host;
-    localPort.value = osc.port;
+  () => props.switchSettings,
+  (switchSettings) => {
+    localMethod.value = switchSettings.method;
+    localHost.value = switchSettings.osc.host;
+    localPort.value = switchSettings.osc.port;
   },
   { deep: true },
 );
@@ -91,10 +103,13 @@ function handleSave() {
   const normalizedPort = Number(localPort.value) || 9000;
 
   emit("save", {
-    osc: {
-      enabled: localEnabled.value,
-      host: normalizedHost,
-      port: normalizedPort,
+    switchSettings: {
+      method: localMethod.value,
+      osc: {
+        enabled: true,
+        host: normalizedHost,
+        port: normalizedPort,
+      },
     },
     ui: {
       tagsEnabled: localTagsEnabled.value,
@@ -108,3 +123,19 @@ function handleSave() {
   busy.value = false;
 }
 </script>
+
+<style scoped>
+.settings-hint {
+  margin: -10px 0 2px;
+  line-height: 1.45;
+}
+
+.osc-settings-group {
+  display: grid;
+  gap: 12px;
+}
+
+.osc-settings-disabled {
+  opacity: 0.48;
+}
+</style>

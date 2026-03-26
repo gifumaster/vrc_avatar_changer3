@@ -59,8 +59,8 @@ pub fn run() {
             commands::load_saved_session,
             commands::save_session,
             commands::clear_saved_session,
-            commands::load_osc_settings,
-            commands::save_osc_settings,
+            commands::load_switch_settings,
+            commands::save_switch_settings,
             commands::login_vrchat,
             commands::submit_two_factor,
             commands::load_cached_avatar_list,
@@ -70,7 +70,7 @@ pub fn run() {
             commands::refresh_latest_avatar_page,
             commands::cache_avatar_thumbnails,
             commands::refresh_avatar_detail,
-            commands::switch_avatar_via_osc,
+            commands::switch_avatar,
             commands::open_external_url
         ])
         .run(tauri::generate_context!())

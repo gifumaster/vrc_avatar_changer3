@@ -31,20 +31,22 @@
 
     <div class="status-block">
       <div class="status-row">
-        <span class="label">OSC</span>
-        <span class="value">{{ osc.enabled ? "enabled" : "disabled" }}</span>
+        <span class="label">Switch</span>
+        <span class="value">{{ switchSettings.method.toUpperCase() }}</span>
       </div>
-      <p class="muted">{{ osc.host }}:{{ osc.port }}</p>
+      <p class="muted">
+        {{ switchSettings.method === "osc" ? `${switchSettings.osc.host}:${switchSettings.osc.port}` : "Uses saved VRChat session" }}
+      </p>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import type { CacheState, OscState, SessionState } from "@/types";
+import type { AvatarSwitchState, CacheState, SessionState } from "@/types";
 
 defineProps<{
   session: SessionState;
   cache: CacheState;
-  osc: OscState;
+  switchSettings: AvatarSwitchState;
 }>();
 </script>

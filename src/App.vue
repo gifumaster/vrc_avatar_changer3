@@ -128,7 +128,7 @@
               <h3>{{ favoriteAvatarCount }} / {{ MAX_FAVORITE_AVATAR_COUNT }}</h3>
             </div>
           </section>
-          <SettingsCard :osc="oscState" :ui="uiSettings" :message="settingsMessage" @save="handleSaveSettings" />
+          <SettingsCard :switch-settings="switchSettings" :ui="uiSettings" :message="settingsMessage" @save="handleSaveSettings" />
         </section>
       </aside>
     </main>
@@ -148,17 +148,17 @@ import {
   cacheAvatarThumbnails,
   clearSavedSession,
   loadCachedAvatarList,
-  loadOscSettings,
+  loadSwitchSettings,
   refreshLatestAvatarPage,
   refreshAvatarList,
   saveAvatarTags,
-  saveOscSettings,
-  switchAvatarViaOsc,
+  saveSwitchSettings,
+  switchAvatar,
   verifySession,
 } from "@/lib/commands";
 import type { AvatarCachePayload, AvatarSummary } from "@/lib/commands";
 import { type MultiTagMode, splitTags } from "@/lib/tags";
-import type { CacheState, OscState, SessionState, UiSettings } from "@/types";
+import type { AvatarSwitchState, CacheState, SessionState, UiSettings } from "@/types";
 
 const avatars = ref<AvatarSummary[]>([]);
 const searchQuery = ref("");
@@ -184,10 +184,13 @@ const cacheState = ref<CacheState>({
   lastSyncedAt: null,
 });
 
-const oscState = ref<OscState>({
-  enabled: true,
-  host: "127.0.0.1",
-  port: 9000,
+const switchSettings = ref<AvatarSwitchState>({
+  method: "osc",
+  osc: {
+    enabled: true,
+    host: "127.0.0.1",
+    port: 9000,
+  },
 });
 const uiSettings = ref<UiSettings>({
   tagsEnabled: false,
@@ -506,9 +509,9 @@ onMounted(() => {
   } catch {
     favoriteAvatarIds.value = [];
   }
-  void loadOscSettings()
+  void loadSwitchSettings()
     .then((settings) => {
-      oscState.value = settings;
+      switchSettings.value = settings;
     })
     .catch(() => {});
   void refreshSession();
@@ -674,10 +677,23 @@ function handleRemoveSearchTerm(term: string) {
 
 async function handleSwitchAvatar(avatarId: string) {
   try {
-    await switchAvatarViaOsc(avatarId);
-    showToast(`Sent /avatar/change for ${avatarId}`, "success");
+    await switchAvatar(avatarId);
+    showToast(
+      switchSettings.value.method === "api"
+        ? `Switched avatar via VRChat API: ${avatarId}`
+        : `Sent /avatar/change for ${avatarId}`,
+      "success",
+    );
   } catch (error) {
-    showToast(error instanceof Error ? error.message : "Failed to send OSC message.", "error", 4800);
+    showToast(
+      error instanceof Error
+        ? error.message
+        : switchSettings.value.method === "api"
+          ? "Failed to switch avatar via VRChat API."
+          : "Failed to send OSC message.",
+      "error",
+      4800,
+    );
   }
 }
 
@@ -686,13 +702,17 @@ async function handleDialogSwitchAvatar(avatarId: string) {
   selectedAvatarId.value = null;
 }
 
-async function handleSaveSettings(payload: { osc: OscState; ui: UiSettings }) {
+async function handleSaveSettings(payload: { switchSettings: AvatarSwitchState; ui: UiSettings }) {
   try {
-    oscState.value = await saveOscSettings(payload.osc);
+    switchSettings.value = await saveSwitchSettings(payload.switchSettings);
     uiSettings.value = payload.ui;
-    settingsMessage.value = `Settings updated. OSC target: ${oscState.value.host}:${oscState.value.port}`;
+    settingsMessage.value =
+      switchSettings.value.method === "api"
+        ? "Settings updated. Avatar switching will use the VRChat API."
+        : `Settings updated. OSC target: ${switchSettings.value.osc.host}:${switchSettings.value.osc.port}`;
+    sidebarOpen.value = false;
   } catch (error) {
-    settingsMessage.value = error instanceof Error ? error.message : "Failed to save OSC settings.";
+    settingsMessage.value = error instanceof Error ? error.message : "Failed to save switch settings.";
   }
 }
 </script>

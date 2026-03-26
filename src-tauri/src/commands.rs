@@ -2,8 +2,8 @@ use crate::{
     auth::CredentialStore,
     cache::AvatarCache,
     models::{
-        AvatarCachePayload, AvatarFetchProgress, LoginRequest, LoginResult, OscSettings,
-        SessionState, StoredSession, TwoFactorRequest,
+        AvatarCachePayload, AvatarFetchProgress, AvatarSwitchMethod, AvatarSwitchSettings,
+        LoginRequest, LoginResult, SessionState, StoredSession, TwoFactorRequest,
     },
     osc::OscClient,
     settings::SettingsStore,
@@ -30,13 +30,13 @@ pub fn clear_saved_session() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn load_osc_settings() -> Result<OscSettings, String> {
-    SettingsStore::new()?.load_osc_settings()
+pub fn load_switch_settings() -> Result<AvatarSwitchSettings, String> {
+    SettingsStore::new()?.load_switch_settings()
 }
 
 #[tauri::command]
-pub fn save_osc_settings(settings: OscSettings) -> Result<OscSettings, String> {
-    SettingsStore::new()?.save_osc_settings(&settings)
+pub fn save_switch_settings(settings: AvatarSwitchSettings) -> Result<AvatarSwitchSettings, String> {
+    SettingsStore::new()?.save_switch_settings(&settings)
 }
 
 #[tauri::command]
@@ -278,13 +278,28 @@ pub async fn refresh_avatar_detail(
 }
 
 #[tauri::command]
-pub fn switch_avatar_via_osc(avatar_id: String) -> Result<(), String> {
-    let settings = SettingsStore::new()?.load_osc_settings()?;
-    if !settings.enabled {
-        return Err("OSC is disabled in settings.".to_string());
-    }
+pub async fn switch_avatar(avatar_id: String) -> Result<(), String> {
+    let settings = SettingsStore::new()?.load_switch_settings()?;
 
-    OscClient::new().switch_avatar(&avatar_id, &settings.host, settings.port)
+    match settings.method {
+        AvatarSwitchMethod::Osc => {
+            if !settings.osc.enabled {
+                return Err("OSC is disabled in settings.".to_string());
+            }
+
+            OscClient::new().switch_avatar(&avatar_id, &settings.osc.host, settings.osc.port)
+        }
+        AvatarSwitchMethod::Api => {
+            let session = CredentialStore::new()?.load_session()?;
+            let Some(session) = session else {
+                return Err("No saved session was found".to_string());
+            };
+
+            VrchatClient::new()
+                .select_avatar(&session.auth_token, &avatar_id)
+                .await
+        }
+    }
 }
 
 #[tauri::command]

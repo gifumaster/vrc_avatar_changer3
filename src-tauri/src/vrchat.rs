@@ -234,14 +234,38 @@ impl VrchatClient {
 
         Ok(AvatarSummary {
             id: avatar.id,
-                name: avatar.name,
-                description: avatar.description.unwrap_or_default(),
-                thumbnail_url: avatar.thumbnail_image_url,
-                thumbnail_path: None,
-                thumbnail_version: None,
-                tags: Vec::new(),
-                updated_at: avatar.updated_at,
-            })
+            name: avatar.name,
+            description: avatar.description.unwrap_or_default(),
+            thumbnail_url: avatar.thumbnail_image_url,
+            thumbnail_path: None,
+            thumbnail_version: None,
+            tags: Vec::new(),
+            updated_at: avatar.updated_at,
+        })
+    }
+
+    pub async fn select_avatar(&self, auth_token: &str, avatar_id: &str) -> Result<(), String> {
+        let response = self
+            .client
+            .put(format!("{API_BASE}/avatars/{avatar_id}/select"))
+            .header(USER_AGENT, APP_USER_AGENT)
+            .header(COOKIE, format!("auth={auth_token}"))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("unauthorized".to_string());
+        }
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "VRChat avatar switch failed with status {}",
+                response.status()
+            ));
+        }
+
+        Ok(())
     }
 
     async fn fetch_api_key(&self) -> Result<String, String> {
@@ -308,14 +332,14 @@ impl VrchatClient {
                 .into_iter()
                 .map(|avatar| AvatarSummary {
                     id: avatar.id,
-            name: avatar.name,
-            description: avatar.description.unwrap_or_default(),
-            thumbnail_url: avatar.thumbnail_image_url,
-            thumbnail_path: None,
-            thumbnail_version: None,
-            tags: Vec::new(),
-            updated_at: avatar.updated_at,
-        })
+                    name: avatar.name,
+                    description: avatar.description.unwrap_or_default(),
+                    thumbnail_url: avatar.thumbnail_image_url,
+                    thumbnail_path: None,
+                    thumbnail_version: None,
+                    tags: Vec::new(),
+                    updated_at: avatar.updated_at,
+                })
                 .collect(),
             total,
         })

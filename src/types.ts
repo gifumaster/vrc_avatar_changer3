@@ -18,10 +18,17 @@ export type CacheState = {
   lastSyncedAt: string | null;
 };
 
+export type AvatarSwitchMethod = "osc" | "api";
+
 export type OscState = {
   enabled: boolean;
   host: string;
   port: number;
+};
+
+export type AvatarSwitchState = {
+  method: AvatarSwitchMethod;
+  osc: OscState;
 };
 
 export type UiSettings = {

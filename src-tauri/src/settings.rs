@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use crate::models::OscSettings;
+use crate::models::{AvatarSwitchMethod, AvatarSwitchSettings, OscSettings};
 
 const APP_DIR_NAME: &str = "AvatarChanger";
 const SETTINGS_FILE: &str = "settings.json";
@@ -23,21 +23,43 @@ impl SettingsStore {
         Ok(Self { path })
     }
 
-    pub fn load_osc_settings(&self) -> Result<OscSettings, String> {
+    pub fn load_switch_settings(&self) -> Result<AvatarSwitchSettings, String> {
         if !self.path.exists() {
-            return Ok(OscSettings::default());
+            return Ok(AvatarSwitchSettings::default());
         }
 
         let json = fs::read_to_string(&self.path).map_err(|error| error.to_string())?;
-        let settings = serde_json::from_str::<OscSettings>(&json).map_err(|error| error.to_string())?;
-        Ok(normalize_osc_settings(settings))
+        let settings = serde_json::from_str::<serde_json::Value>(&json).map_err(|error| error.to_string())?;
+        Ok(normalize_switch_settings(parse_switch_settings(settings)?))
     }
 
-    pub fn save_osc_settings(&self, settings: &OscSettings) -> Result<OscSettings, String> {
-        let normalized = normalize_osc_settings(settings.clone());
+    pub fn save_switch_settings(
+        &self,
+        settings: &AvatarSwitchSettings,
+    ) -> Result<AvatarSwitchSettings, String> {
+        let normalized = normalize_switch_settings(settings.clone());
         let json = serde_json::to_string_pretty(&normalized).map_err(|error| error.to_string())?;
         fs::write(&self.path, json).map_err(|error| error.to_string())?;
         Ok(normalized)
+    }
+}
+
+fn parse_switch_settings(value: serde_json::Value) -> Result<AvatarSwitchSettings, String> {
+    if value.get("osc").is_some() || value.get("method").is_some() {
+        return serde_json::from_value::<AvatarSwitchSettings>(value).map_err(|error| error.to_string());
+    }
+
+    let osc = serde_json::from_value::<OscSettings>(value).map_err(|error| error.to_string())?;
+    Ok(AvatarSwitchSettings {
+        method: AvatarSwitchMethod::Osc,
+        osc,
+    })
+}
+
+fn normalize_switch_settings(settings: AvatarSwitchSettings) -> AvatarSwitchSettings {
+    AvatarSwitchSettings {
+        method: settings.method,
+        osc: normalize_osc_settings(settings.osc),
     }
 }
 
