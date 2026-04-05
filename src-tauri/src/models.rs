@@ -45,6 +45,12 @@ pub struct TwoFactorRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct UploadAvatarImageRequest {
+    pub avatar_id: String,
+    pub image_base64: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResult {
     pub status: String,
     pub username: String,

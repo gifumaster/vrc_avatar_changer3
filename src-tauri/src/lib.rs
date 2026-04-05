@@ -70,6 +70,7 @@ pub fn run() {
             commands::refresh_latest_avatar_page,
             commands::cache_avatar_thumbnails,
             commands::refresh_avatar_detail,
+            commands::upload_avatar_image,
             commands::switch_avatar,
             commands::open_external_url
         ])

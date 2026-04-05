@@ -2,10 +2,11 @@ use base64::Engine;
 use reqwest::{
     header::HeaderMap,
     header::{AUTHORIZATION, CONTENT_TYPE, COOKIE, SET_COOKIE, USER_AGENT},
+    multipart::{Form, Part},
     Client,
 };
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::time::{sleep, Duration};
 
 use crate::models::{AvatarSummary, LoginResult};
@@ -60,6 +61,16 @@ struct AvatarDetailResponse {
     thumbnail_image_url: Option<String>,
     #[serde(rename = "updated_at")]
     updated_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiErrorEnvelope {
+    error: ApiErrorBody,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiErrorBody {
+    message: String,
 }
 
 struct AvatarPage {
@@ -268,6 +279,88 @@ impl VrchatClient {
         Ok(())
     }
 
+    pub async fn upload_avatar_image(
+        &self,
+        auth_token: &str,
+        avatar_id: &str,
+        image_base64: &str,
+    ) -> Result<(), String> {
+        let image_bytes = base64::engine::general_purpose::STANDARD
+            .decode(image_base64)
+            .map_err(|error| error.to_string())?;
+        let form = Form::new()
+            .text("tag", "avatarimage")
+            .part(
+                "file",
+                Part::bytes(image_bytes)
+                    .file_name("blob.png")
+                    .mime_str("image/png")
+                    .map_err(|error| error.to_string())?,
+            );
+
+        let upload_response = self
+            .client
+            .post(format!("{API_BASE}/file/image"))
+            .header(USER_AGENT, APP_USER_AGENT)
+            .header(COOKIE, format!("auth={auth_token}"))
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        if upload_response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("unauthorized".to_string());
+        }
+
+        if !upload_response.status().is_success() {
+            return Err(read_api_error(
+                upload_response,
+                "VRChat avatar image upload failed",
+            )
+            .await);
+        }
+
+        let upload_body = read_json_value(upload_response, "VRChat avatar image upload returned an invalid response").await?;
+        let image_url = extract_uploaded_image_url(&upload_body)
+            .ok_or_else(|| "VRChat avatar image upload did not return a usable file URL".to_string())?;
+
+        let update_response = self
+            .client
+            .put(format!("{API_BASE}/avatars/{avatar_id}"))
+            .header(USER_AGENT, APP_USER_AGENT)
+            .header(COOKIE, format!("auth={auth_token}"))
+            .header(CONTENT_TYPE, "application/json")
+            .json(&json!({ "imageUrl": image_url }))
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        if update_response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("unauthorized".to_string());
+        }
+
+        if !update_response.status().is_success() {
+            return Err(read_api_error(
+                update_response,
+                "VRChat avatar update failed",
+            )
+            .await);
+        }
+
+        let updated_body =
+            read_json_value(update_response, "VRChat avatar update returned an invalid response").await?;
+        if updated_body
+            .get("imageUrl")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .is_none()
+        {
+            return Err("VRChat avatar update did not return imageUrl".to_string());
+        }
+
+        Ok(())
+    }
+
     async fn fetch_api_key(&self) -> Result<String, String> {
         let response = self
             .client
@@ -381,4 +474,42 @@ fn parse_total_count_header(headers: &HeaderMap) -> Option<usize> {
         .find_map(|name| headers.get(name))
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<usize>().ok())
+}
+
+async fn read_api_error(response: reqwest::Response, fallback: &str) -> String {
+    let status = response.status();
+    match response.json::<ApiErrorEnvelope>().await {
+        Ok(body) => format!("{fallback} with status {}: {}", status, body.error.message),
+        Err(_) => format!("{fallback} with status {}", status),
+    }
+}
+
+async fn read_json_value(response: reqwest::Response, fallback: &str) -> Result<Value, String> {
+    let status = response.status();
+    let body = response.text().await.map_err(|error| error.to_string())?;
+    serde_json::from_str::<Value>(&body).map_err(|error| {
+        let preview: String = body.chars().take(240).collect();
+        format!("{fallback} (status {status}): {error}. Body: {preview}")
+    })
+}
+
+fn extract_uploaded_image_url(value: &Value) -> Option<String> {
+    value
+        .pointer("/versions")
+        .and_then(Value::as_array)
+        .and_then(|versions| versions.last())
+        .and_then(|version| version.pointer("/file/url"))
+        .and_then(Value::as_str)
+        .map(ToString::to_string)
+        .or_else(|| {
+            value.pointer("/files/image")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+        })
+        .or_else(|| {
+            value.pointer("/metadata/imageUrl")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+        })
+        .or_else(|| value.get("imageUrl").and_then(Value::as_str).map(ToString::to_string))
 }

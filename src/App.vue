@@ -91,6 +91,7 @@
           :tag-suggestions="availableTagSuggestions"
           :is-favorite="selectedAvatar ? favoriteAvatarIdSet.has(selectedAvatar.id) : false"
           @close="selectedAvatarId = null"
+          @notify="showToast($event.message, $event.tone)"
           @refresh-avatar="applyAvatarPayload"
           @save-tags="handleSaveTags"
           @switch-avatar="handleDialogSwitchAvatar"

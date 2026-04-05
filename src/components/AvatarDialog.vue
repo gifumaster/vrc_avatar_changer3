@@ -88,6 +88,9 @@
               <button class="ghost-button dialog-link" type="button" @click="handleOpenVrchat">
                 VRChat
               </button>
+              <button class="ghost-button" type="button" :disabled="uploadBusy || busy" @click="openImagePicker">
+                {{ uploadBusy ? "アップロード中..." : "サムネイル画像を変更" }}
+              </button>
               <button class="ghost-button" type="button" :disabled="busy" @click="handleRefreshAvatar">
                 {{ busy ? "更新中..." : "サムネイル更新" }}
               </button>
@@ -98,6 +101,13 @@
           </div>
 
           <p v-if="errorMessage" class="error-text dialog-error">{{ errorMessage }}</p>
+          <input
+            ref="imageInputRef"
+            type="file"
+            accept="image/*"
+            hidden
+            @change="handleImageSelected"
+          />
         </section>
       </div>
     </div>
@@ -108,7 +118,8 @@
 import { computed, ref, watch } from "vue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-import { openExternalUrl, refreshAvatarDetail } from "@/lib/commands";
+import { openExternalUrl, refreshAvatarDetail, uploadAvatarImage } from "@/lib/commands";
+import { extractBase64Payload, processAvatarImageFile } from "@/lib/avatarImage";
 import { addMultiTag, removeTag, splitTags } from "@/lib/tags";
 import type { AvatarCachePayload, AvatarSummary } from "@/lib/commands";
 
@@ -126,12 +137,15 @@ const emit = defineEmits<{
   "save-tags": [payload: { avatarId: string; tags: string[] }];
   "refresh-avatar": [payload: AvatarCachePayload];
   "toggle-favorite": [avatarId: string];
+  notify: [payload: { message: string; tone: "success" | "error" | "info" }];
 }>();
 
 const draftTag = ref("");
 const editableTags = ref<string[]>([]);
 const busy = ref(false);
+const uploadBusy = ref(false);
 const errorMessage = ref("");
+const imageInputRef = ref<HTMLInputElement | null>(null);
 const avatarTags = computed(() => props.avatar?.tags ?? []);
 
 const thumbnailSrc = computed(() => {
@@ -195,6 +209,84 @@ async function handleRefreshAvatar() {
   }
 }
 
+function openImagePicker() {
+  if (!props.avatar || uploadBusy.value) {
+    return;
+  }
+
+  imageInputRef.value?.click();
+}
+
+async function handleImageSelected(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const [file] = Array.from(target.files ?? []);
+  target.value = "";
+
+  if (!props.avatar || !file) {
+    return;
+  }
+
+  uploadBusy.value = true;
+  errorMessage.value = "";
+
+  try {
+    const processedImage = await processAvatarImageFile(file);
+    const payload = await uploadAvatarImage({
+      avatarId: props.avatar.id,
+      imageBase64: extractBase64Payload(processedImage),
+    });
+    emit("refresh-avatar", payload);
+    emit("notify", {
+      message: "サムネイル画像を更新しました。反映まで少し時間がかかる場合があります。",
+      tone: "success",
+    });
+  } catch (error) {
+    errorMessage.value = formatUploadError(error);
+    emit("notify", {
+      message: errorMessage.value,
+      tone: "error",
+    });
+  } finally {
+    uploadBusy.value = false;
+  }
+}
+
+function formatUploadError(error: unknown): string {
+  const rawMessage =
+    typeof error === "string" ? error : error instanceof Error ? error.message : "Failed to upload avatar image.";
+  const message = rawMessage.replace(/\s+/g, " ").trim();
+
+  if (message.includes("unauthorized")) {
+    return "VRChat セッションの認証に失敗しました。再ログインしてからもう一度お試しください。";
+  }
+
+  if (message.includes("did not return a usable file URL")) {
+    return "画像アップロードは成功しましたが、VRChat から画像 URL を取得できませんでした。";
+  }
+
+  if (message.includes("did not return imageUrl")) {
+    return "画像は送信できましたが、VRChat 側でアバター画像の更新結果を確認できませんでした。";
+  }
+
+  if (message.includes("VRChat avatar image upload failed")) {
+    return `VRChat への画像アップロードに失敗しました。${message}`;
+  }
+
+  if (message.includes("VRChat avatar update failed")) {
+    return `VRChat 側のアバター更新に失敗しました。${message}`;
+  }
+
+  if (message.includes("Failed to decode image")) {
+    return "画像を読み込めませんでした。別の画像でお試しください。";
+  }
+
+  if (message.includes("Failed to read image file")) {
+    return "画像ファイルを読み取れませんでした。";
+  }
+
+  return `サムネイル画像の更新に失敗しました。${message}`;
+}
+
 function handleAddTag(tag = draftTag.value) {
   const nextTags = addMultiTag(editableTags.value, tag);
   if (nextTags === editableTags.value) {
@@ -226,5 +318,8 @@ function resetEditorState() {
   editableTags.value = [...avatarTags.value];
   draftTag.value = "";
   errorMessage.value = "";
+  if (imageInputRef.value) {
+    imageInputRef.value.value = "";
+  }
 }
 </script>

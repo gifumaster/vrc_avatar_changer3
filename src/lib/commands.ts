@@ -10,6 +10,11 @@ export type TwoFactorInput = {
   mode: "totp" | "emailotp";
 };
 
+export type UploadAvatarImageInput = {
+  avatarId: string;
+  imageBase64: string;
+};
+
 export type AvatarFilter = {
   query: string;
   tags: string[];
@@ -101,6 +106,15 @@ export async function cacheAvatarThumbnails(avatarIds: string[]): Promise<Avatar
 
 export async function refreshAvatarDetail(avatarId: string): Promise<AvatarCachePayload> {
   return invoke<AvatarCachePayload>("refresh_avatar_detail", { avatarId });
+}
+
+export async function uploadAvatarImage(input: UploadAvatarImageInput): Promise<AvatarCachePayload> {
+  return invoke<AvatarCachePayload>("upload_avatar_image", {
+    request: {
+      avatar_id: input.avatarId,
+      image_base64: input.imageBase64,
+    },
+  });
 }
 
 export async function switchAvatar(_avatarId: string): Promise<void> {

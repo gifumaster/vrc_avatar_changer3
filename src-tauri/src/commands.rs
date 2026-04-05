@@ -4,6 +4,7 @@ use crate::{
     models::{
         AvatarCachePayload, AvatarFetchProgress, AvatarSwitchMethod, AvatarSwitchSettings,
         LoginRequest, LoginResult, SessionState, StoredSession, TwoFactorRequest,
+        UploadAvatarImageRequest,
     },
     osc::OscClient,
     settings::SettingsStore,
@@ -274,6 +275,46 @@ pub async fn refresh_avatar_detail(
                 },
             );
         })
+        .await
+}
+
+#[tauri::command]
+pub async fn upload_avatar_image(
+    app: tauri::AppHandle,
+    request: UploadAvatarImageRequest,
+) -> Result<AvatarCachePayload, String> {
+    let session = CredentialStore::new()?.load_session()?;
+    let Some(session) = session else {
+        return Err("No saved session was found".to_string());
+    };
+
+    let client = VrchatClient::new();
+    client
+        .upload_avatar_image(&session.auth_token, &request.avatar_id, &request.image_base64)
+        .await?;
+
+    let cache = AvatarCache::new()?;
+    let avatar = client
+        .get_avatar(&session.auth_token, &request.avatar_id)
+        .await?;
+    let _ = cache.upsert_avatar(avatar)?;
+
+    cache
+        .refresh_thumbnails(
+            &client.http_client(),
+            &session.auth_token,
+            &[request.avatar_id],
+            |fetched, total| {
+                let _ = app.emit(
+                    AVATAR_FETCH_PROGRESS_EVENT,
+                    AvatarFetchProgress {
+                        phase: "thumbnails".to_string(),
+                        fetched,
+                        total: Some(total),
+                    },
+                );
+            },
+        )
         .await
 }
 
