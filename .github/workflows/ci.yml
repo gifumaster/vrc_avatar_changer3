@@ -1,18 +1,21 @@
-name: release
+name: ci
 
 on:
-  workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
     paths:
-      - 'src/**'
-      - 'src-tauri/**'
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/**"
+      - "vite.config.ts"
+      - "tsconfig.json"
 
 jobs:
-  build-and-release:
-    permissions:
-      contents: write
+  test:
     runs-on: windows-latest
 
     steps:
@@ -36,14 +39,3 @@ jobs:
 
       - name: Run Rust unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
-
-      - name: Build and publish Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: app-v__VERSION__
-          releaseName: Avatar Changer v__VERSION__
-          releaseBody: See the attached installer assets for this build.
-          releaseDraft: false
-          prerelease: false

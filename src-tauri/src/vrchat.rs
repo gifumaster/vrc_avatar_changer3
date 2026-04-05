@@ -440,7 +440,11 @@ impl VrchatClient {
 }
 
 fn extract_auth_token(response: &reqwest::Response) -> Result<String, String> {
-    for value in response.headers().get_all(SET_COOKIE) {
+    extract_auth_token_from_headers(response.headers())
+}
+
+fn extract_auth_token_from_headers(headers: &HeaderMap) -> Result<String, String> {
+    for value in headers.get_all(SET_COOKIE) {
         let cookie = value.to_str().map_err(|error| error.to_string())?;
         if let Some(token) = cookie
             .split(';')
@@ -512,4 +516,70 @@ fn extract_uploaded_image_url(value: &Value) -> Option<String> {
                 .map(ToString::to_string)
         })
         .or_else(|| value.get("imageUrl").and_then(Value::as_str).map(ToString::to_string))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::header::{HeaderValue, SET_COOKIE};
+    use serde_json::json;
+
+    #[test]
+    fn extract_auth_token_from_headers_returns_auth_cookie() {
+        let mut headers = HeaderMap::new();
+        headers.append(SET_COOKIE, HeaderValue::from_static("foo=bar; Path=/"));
+        headers.append(
+            SET_COOKIE,
+            HeaderValue::from_static("auth=test-token; Path=/; HttpOnly"),
+        );
+
+        assert_eq!(
+            extract_auth_token_from_headers(&headers).expect("auth token should exist"),
+            "test-token"
+        );
+    }
+
+    #[test]
+    fn pick_two_factor_mode_prefers_totp() {
+        let modes = vec!["emailOtp".to_string(), "totp".to_string()];
+
+        assert_eq!(pick_two_factor_mode(Some(&modes)), Some("totp".to_string()));
+    }
+
+    #[test]
+    fn parse_total_count_header_checks_supported_names() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-total-count", HeaderValue::from_static("42"));
+
+        assert_eq!(parse_total_count_header(&headers), Some(42));
+    }
+
+    #[test]
+    fn extract_uploaded_image_url_supports_versions_shape() {
+        let value = json!({
+            "versions": [
+                { "file": { "url": "https://example.com/old.png" } },
+                { "file": { "url": "https://example.com/latest.png" } }
+            ]
+        });
+
+        assert_eq!(
+            extract_uploaded_image_url(&value),
+            Some("https://example.com/latest.png".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_uploaded_image_url_supports_files_shape() {
+        let value = json!({
+            "files": {
+                "image": "https://example.com/files-image.png"
+            }
+        });
+
+        assert_eq!(
+            extract_uploaded_image_url(&value),
+            Some("https://example.com/files-image.png".to_string())
+        );
+    }
 }
