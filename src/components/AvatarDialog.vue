@@ -175,11 +175,7 @@ const filteredTagSuggestions = computed(() => props.tagSuggestions.filter((tag) 
 
 watch(
   () => [props.open, props.avatar?.id, props.avatar?.tags] as const,
-  (current, previous) => {
-    const [open, avatarId] = current;
-    const previousOpen = previous?.[0] ?? false;
-    const previousAvatarId = previous?.[1] ?? null;
-
+  () => {
     resetEditorState();
   },
   { immediate: true },

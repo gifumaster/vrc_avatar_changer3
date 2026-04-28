@@ -72,6 +72,7 @@ pub fn run() {
             commands::refresh_avatar_detail,
             commands::upload_avatar_image,
             commands::switch_avatar,
+            commands::set_avatar_eye_height,
             commands::open_external_url
         ])
         .run(tauri::generate_context!())

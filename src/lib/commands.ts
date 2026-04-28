@@ -121,6 +121,10 @@ export async function switchAvatar(_avatarId: string): Promise<void> {
   return invoke("switch_avatar", { avatarId: _avatarId });
 }
 
+export async function setAvatarEyeHeight(eyeHeightMeters: number): Promise<void> {
+  return invoke("set_avatar_eye_height", { eyeHeightMeters });
+}
+
 export async function loadSwitchSettings(): Promise<AvatarSwitchSettings> {
   return invoke<AvatarSwitchSettings>("load_switch_settings");
 }

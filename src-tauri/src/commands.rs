@@ -344,6 +344,29 @@ pub async fn switch_avatar(avatar_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn set_avatar_eye_height(eye_height_meters: f32) -> Result<(), String> {
+    if !eye_height_meters.is_finite() {
+        return Err("Eye height must be a finite number.".to_string());
+    }
+
+    if eye_height_meters < 0.01 {
+        return Err("Eye height must be at least 0.01 meters.".to_string());
+    }
+
+    let settings = SettingsStore::new()?.load_switch_settings()?;
+
+    if !settings.osc.enabled {
+        return Err("OSC is disabled in settings.".to_string());
+    }
+
+    OscClient::new().set_avatar_eye_height(
+        eye_height_meters,
+        &settings.osc.host,
+        settings.osc.port,
+    )
+}
+
+#[tauri::command]
 pub fn open_external_url(url: String) -> Result<(), String> {
     Command::new("cmd")
         .args(["/C", "start", "", &url])

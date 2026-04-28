@@ -29,6 +29,9 @@
               >
                 Random
               </button>
+              <button class="ghost-button title-action-button" type="button" :disabled="!showAvatarBrowser" @click="eyeHeightDialogOpen = true">
+                Eye Height
+              </button>
               <button
                 class="icon-button"
                 type="button"
@@ -97,6 +100,7 @@
           @switch-avatar="handleDialogSwitchAvatar"
           @toggle-favorite="toggleFavoriteAvatar"
         />
+        <EyeHeightDialog :open="eyeHeightDialogOpen" @close="eyeHeightDialogOpen = false" @send="handleDialogSetEyeHeight" />
       </section>
 
       <aside class="sidebar-panel" :class="{ 'sidebar-panel-open': sidebarOpen }">
@@ -142,6 +146,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import AvatarGrid from "@/components/AvatarGrid.vue";
 import AvatarDialog from "@/components/AvatarDialog.vue";
+import EyeHeightDialog from "@/components/EyeHeightDialog.vue";
 import LoginCard from "@/components/LoginCard.vue";
 import SearchToolbar from "@/components/SearchToolbar.vue";
 import SettingsCard from "@/components/SettingsCard.vue";
@@ -154,6 +159,7 @@ import {
   refreshAvatarList,
   saveAvatarTags,
   saveSwitchSettings,
+  setAvatarEyeHeight,
   switchAvatar,
   verifySession,
 } from "@/lib/commands";
@@ -169,6 +175,7 @@ const activeMultiTags = ref<string[]>([]);
 const multiTagMode = ref<MultiTagMode>("all");
 const sidebarOpen = ref(false);
 const selectedAvatarId = ref<string | null>(null);
+const eyeHeightDialogOpen = ref(false);
 const SEARCH_TERMS_STORAGE_KEY = "avatar-changer.search-terms";
 const UI_SETTINGS_STORAGE_KEY = "avatar-changer.ui-settings";
 const FAVORITE_AVATAR_IDS_STORAGE_KEY = "avatar-changer.favorite-avatar-ids";
@@ -701,6 +708,19 @@ async function handleSwitchAvatar(avatarId: string) {
 async function handleDialogSwitchAvatar(avatarId: string) {
   await handleSwitchAvatar(avatarId);
   selectedAvatarId.value = null;
+}
+
+async function handleDialogSetEyeHeight(eyeHeightMeters: number) {
+  try {
+    await setAvatarEyeHeight(eyeHeightMeters);
+    showToast(`Sent /avatar/eyeheight ${eyeHeightMeters.toFixed(2)}m`, "success");
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : "Failed to send /avatar/eyeheight.",
+      "error",
+      4800,
+    );
+  }
 }
 
 async function handleSaveSettings(payload: { switchSettings: AvatarSwitchState; ui: UiSettings }) {
